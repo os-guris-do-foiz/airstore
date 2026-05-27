@@ -18,18 +18,19 @@ export async function apiFetch<T>(endpoint: string, options: FetchOptions = {}):
     if (searchParams.toString()) url += `?${searchParams.toString()}`;
   }
   
-  // VERIFICA SE ESTAMOS ENVIANDO ARQUIVOS (FormData)
   const isFormData = data instanceof FormData;
-  
   const headers: Record<string, string> = {};
 
-  // Copia os headers customizados (como o Token de Autenticação)
+  // 🛡️ O SEGREDO QUE FALTAVA: Anexar o token de segurança 🛡️
+  const token = localStorage.getItem("fronteira_token");
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
   if (customConfig.headers) {
     Object.assign(headers, customConfig.headers);
   }
 
-  // A MÁGICA: Se NÃO for FormData, colocamos a etiqueta de JSON. 
-  // Se for FormData, o navegador coloca o Content-Type automaticamente!
   if (!isFormData) {
     headers['Content-Type'] = 'application/json';
   }
@@ -41,12 +42,10 @@ export async function apiFetch<T>(endpoint: string, options: FetchOptions = {}):
   };
 
   if (data) {
-    // Se for FormData envia direto, senão transforma em texto (JSON)
     config.body = isFormData ? data : JSON.stringify(data);
   }
 
   const response = await fetch(url, config);
-  
   const result = await response.json();
 
   if (response.ok) {

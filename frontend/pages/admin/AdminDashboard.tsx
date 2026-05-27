@@ -9,7 +9,8 @@ import { reportsApi, Report } from "../../api/reports";
 import { usersApi, AppUser, UserRole, UserStatus } from "../../api/users";
 import { Link } from "react-router-dom";
 
-const RoleBadges = ({ roles }: { roles: UserRole[] }) => {
+// 🛡️ TRAVA 1: Se 'roles' vier vazio, assume uma lista vazia []
+const RoleBadges = ({ roles = [] }: { roles: UserRole[] }) => {
   return (
     <div className="flex flex-wrap gap-1">
       {roles.map(r => {
@@ -18,6 +19,7 @@ const RoleBadges = ({ roles }: { roles: UserRole[] }) => {
           case "FIELD_OWNER": return <span key={r} className="flex items-center gap-1 bg-brand-primary/20 text-brand-primary px-2 py-1 rounded text-[10px] font-black tracking-widest"><Store size={10}/> PARCEIRO</span>;
           case "PREMIUM": return <span key={r} className="flex items-center gap-1 bg-yellow-500/20 text-yellow-500 px-2 py-1 rounded text-[10px] font-black tracking-widest"><BadgeCheck size={10}/> DOADOR</span>;
           case "USER": return <span key={r} className="flex items-center gap-1 bg-gray-500/20 text-gray-400 px-2 py-1 rounded text-[10px] font-black tracking-widest"><User size={10}/> OPERADOR</span>;
+          default: return null;
         }
       })}
     </div>
@@ -32,7 +34,6 @@ const AdminDashboard: React.FC = () => {
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [search, setSearch] = useState("");
   
-  // Modal State de mudança de cargo
   const [editingUser, setEditingUser] = useState<AppUser | null>(null);
 
   useEffect(() => {
@@ -76,14 +77,16 @@ const AdminDashboard: React.FC = () => {
     }
   };
 
+  // 🛡️ TRAVA 2: Evita crash se o usuário não tiver nome ou email
   const filteredUsers = users.filter(u => 
-    u.name.toLowerCase().includes(search.toLowerCase()) || 
-    u.email.toLowerCase().includes(search.toLowerCase())
+    (u.name || "").toLowerCase().includes(search.toLowerCase()) || 
+    (u.email || "").toLowerCase().includes(search.toLowerCase())
   );
 
   const toggleRoleForEditingUser = (role: UserRole) => {
     if (!editingUser) return;
-    const currentRoles = editingUser.roles;
+    // 🛡️ TRAVA 3: Garante que os cargos existam antes de usar .includes
+    const currentRoles = editingUser.roles || [];
     const newRoles = currentRoles.includes(role) 
       ? currentRoles.filter(r => r !== role)
       : [...currentRoles, role];
@@ -161,11 +164,12 @@ const AdminDashboard: React.FC = () => {
             </div>
             <div className="bg-brand-card border border-brand-border rounded-2xl p-4">
               <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-1">Parceiros</p>
-              <p className="text-2xl font-black text-brand-primary">{users.filter(u => u.roles.includes('FIELD_OWNER')).length}</p>
+              {/* 🛡️ TRAVA 4: .includes protegido */}
+              <p className="text-2xl font-black text-brand-primary">{users.filter(u => (u.roles || []).includes('FIELD_OWNER')).length}</p>
             </div>
             <div className="bg-brand-card border border-brand-border rounded-2xl p-4">
               <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-1">Doadores</p>
-              <p className="text-2xl font-black text-yellow-500">{users.filter(u => u.roles.includes('PREMIUM')).length}</p>
+              <p className="text-2xl font-black text-yellow-500">{users.filter(u => (u.roles || []).includes('PREMIUM')).length}</p>
             </div>
             <div className="bg-brand-card border border-brand-border rounded-2xl p-4">
               <p className="text-red-500/80 text-[10px] font-bold uppercase tracking-widest mb-1">Banidos</p>
@@ -201,16 +205,16 @@ const AdminDashboard: React.FC = () => {
                       <td className="p-6">
                         <div className="flex items-center gap-3">
                           <div className="w-10 h-10 rounded-full bg-gray-800 flex items-center justify-center text-white font-black">
-                            {user.name.charAt(0)}
+                            {(user.name || "?").charAt(0)}
                           </div>
                           <div className="flex flex-col">
-                            <span className="font-bold text-white tracking-tight">{user.name}</span>
+                            <span className="font-bold text-white tracking-tight">{user.name || "Sem Nome"}</span>
                             <span className="text-[10px] text-gray-500 uppercase tracking-widest">{user.email}</span>
                           </div>
                         </div>
                       </td>
                       <td className="p-6">
-                        <RoleBadges roles={user.roles} />
+                        <RoleBadges roles={user.roles || []} />
                       </td>
                       <td className="p-6">
                         {user.status === 'ACTIVE' ? (
@@ -386,7 +390,8 @@ const AdminDashboard: React.FC = () => {
                 { role: "FIELD_OWNER", title: "Dono de Campo", icon: <Store className="text-brand-primary" /> },
                 { role: "ADMIN", title: "Administrador", icon: <ShieldAlert className="text-red-500" /> }
               ].map(r => {
-                const hasRole = editingUser.roles.includes(r.role as UserRole);
+                // 🛡️ TRAVA 5: Blindado no modal de edição
+                const hasRole = (editingUser.roles || []).includes(r.role as UserRole);
                 return (
                   <button
                     key={r.role}

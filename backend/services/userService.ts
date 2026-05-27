@@ -5,14 +5,24 @@ import { Comment } from "../domains/comment";
 import { Rating } from "../domains/rating";
 
 export const getAllUsers = async () => {
-  const userRepo = AppDataSource.getRepository(User);
-  return await userRepo.find({
-    select: { id: true, name: true, email: true, avatar: true, rating: true, is_donor: true }
+  const userRepo = AppDataSource.getRepository<User>("User");
+  const users = await userRepo.find({
+    order: { created_at: "DESC" }
+  });
+
+
+  return users.map(user => {
+    const { password_hash, ...safeUser } = user;
+    return {
+      ...safeUser,
+      roles: safeUser.roles || ['USER'],
+      status: 'ACTIVE'
+    };
   });
 };
 
 export const getUserById = async (id: string) => {
-  const userRepo = AppDataSource.getRepository(User);
+  const userRepo = AppDataSource.getRepository<User>("User");
   const user = await userRepo.findOne({ where: { id } });
   
   if (!user) return null;
@@ -23,10 +33,10 @@ export const getUserById = async (id: string) => {
     await userRepo.update(id, { is_donor: false, donor_expiry: null as any });
   }
 
-  const adRepo = AppDataSource.getRepository(Ad);
+  const adRepo = AppDataSource.getRepository<Ad>("Ad");
   const userAds = await adRepo.find({ where: { user: { id } } });
 
-  const commentRepo = AppDataSource.getRepository(Comment);
+  const commentRepo = AppDataSource.getRepository<Comment>("Comment");
   const comments = await commentRepo.find({ 
     where: { profile_user: { id } },
     relations: { author_user: true } 
@@ -36,6 +46,8 @@ export const getUserById = async (id: string) => {
 
   return {
     ...safeUser,
+    roles: safeUser.roles || ['USER'],
+    status: 'ACTIVE',
     activeAdsCount: userAds.filter(ad => !ad.is_sold).length,
     ads: userAds,
     reviews: comments.map(c => ({
@@ -48,7 +60,7 @@ export const getUserById = async (id: string) => {
 };
 
 export const addComment = async (profileUserId: string, authorUserId: string, content: string) => {
-  const commentRepo = AppDataSource.getRepository(Comment);
+  const commentRepo = AppDataSource.getRepository<Comment>("Comment");
   const newComment = commentRepo.create({
     profile_user: { id: profileUserId },
     author_user: { id: authorUserId },
@@ -58,10 +70,10 @@ export const addComment = async (profileUserId: string, authorUserId: string, co
 };
 
 export const addRating = async (profileUserId: string, authorUserId: string, score: number) => {
-  const ratingRepo = AppDataSource.getRepository(Rating);
-  const userRepo = AppDataSource.getRepository(User);
+  const ratingRepo = AppDataSource.getRepository<Rating>("Rating");
+  const userRepo = AppDataSource.getRepository<User>("User");
 
-  // Tenta achar se já existe uma avaliação desse autor para esse perfil
+
   let rating = await ratingRepo.findOne({
     where: { profile_user: { id: profileUserId }, author_user: { id: authorUserId } }
   });
@@ -78,7 +90,7 @@ export const addRating = async (profileUserId: string, authorUserId: string, sco
     await ratingRepo.save(newRating);
   }
 
-  // Recalcula a média
+  
   const allRatings = await ratingRepo.find({ where: { profile_user: { id: profileUserId } } });
   const totalScore = allRatings.reduce((sum, r) => sum + r.score, 0);
   const avgRating = totalScore / allRatings.length;
@@ -89,4 +101,20 @@ export const addRating = async (profileUserId: string, authorUserId: string, sco
   });
 
   return { avgRating, reviewsCount: allRatings.length };
+};
+
+export const updateUserRoles = async (id: string, roles: string[]) => {
+  const userRepo = AppDataSource.getRepository<User>("User");
+  
+
+  const is_donor = roles.includes("PREMIUM");
+  
+  await userRepo.update(id, { roles, is_donor });
+  return true;
+};
+
+export const updateUserStatus = async (id: string, status: string) => {
+  const userRepo = AppDataSource.getRepository<User>("User");
+  await userRepo.update(id, { status });
+  return true;
 };

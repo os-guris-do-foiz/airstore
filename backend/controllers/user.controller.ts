@@ -20,28 +20,21 @@ export const getById = async (req: Request, res: Response) => {
   }
 };
 
-export const addComment = async (req: any, res: Response) => {
+// 👇 NOVOS CONTROLADORES DO ADMIN 👇
+export const updateRoles = async (req: Request, res: Response) => {
   try {
-    const { content } = req.body;
-    const profileUserId = req.params.id;
-    const authorUserId = req.user.id; // Pega o ID de quem está logado fazendo a ação
-    
-    const comment = await userService.addComment(profileUserId, authorUserId, content);
-    res.status(201).json(comment);
+    const success = await userService.updateUserRoles(req.params.id, req.body.roles);
+    res.json({ success });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    res.status(400).json({ error: error.message });
   }
 };
 
-export const addRating = async (req: any, res: Response) => {
+export const updateStatus = async (req: Request, res: Response) => {
   try {
-    const { score } = req.body;
-    const profileUserId = req.params.id;
-    const authorUserId = req.user.id;
-    
-    const result = await userService.addRating(profileUserId, authorUserId, score);
-    res.json(result);
+    const success = await userService.updateUserStatus(req.params.id, req.body.status);
+    res.json({ success });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    res.status(400).json({ error: error.message });
   }
 };
