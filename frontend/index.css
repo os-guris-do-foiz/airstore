@@ -1,0 +1,44 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700;800&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+
+  --color-brand-bg: #0a0a0a;
+  --color-brand-card: #141414;
+  --color-brand-border: #262626;
+  --color-brand-primary: #ffffff;
+  --color-brand-primary-light: #e5e5e5;
+  --color-brand-primary-dark: #a3a3a3;
+  --color-brand-green: #22c55e;
+  --color-brand-text: #f5f5f5;
+
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+  --radius-3xl: 1.5rem;
+}
+
+@layer base {
+  body {
+    @apply bg-brand-bg text-brand-text font-sans antialiased;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-brand-primary text-black hover:bg-brand-primary-light transition-all duration-300 rounded-xl flex items-center justify-center font-black shadow-xl shadow-white/5;
+  }
+
+  .input-field {
+    @apply bg-brand-bg border border-brand-border rounded-xl px-4 text-white placeholder-gray-600 focus:border-brand-primary focus:ring-1 focus:ring-brand-primary outline-none transition-all;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
