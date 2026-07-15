@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect } from "react";
 import { Search, ChevronDown } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
+import CornerBrackets from "./CornerBrackets";
+import { MODEL_OPTIONS, TYPE_OPTIONS, CATEGORY_OPTIONS } from "../utils/adOptions";
 
 const CustomDropdown = ({
   label,
@@ -35,7 +37,7 @@ const CustomDropdown = ({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className={`w-full h-14 px-5 flex items-center justify-between bg-brand-bg/40 border rounded-2xl transition-all duration-300 group ${
+        className={`tactical-panel-sm w-full h-14 px-5 flex items-center justify-between bg-brand-bg/40 border transition-all duration-300 group ${
           isOpen
             ? "border-brand-primary ring-4 ring-brand-primary/10"
             : "border-gray-800 hover:border-gray-700"
@@ -63,7 +65,7 @@ const CustomDropdown = ({
             initial={{ opacity: 0, y: 10, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.95 }}
-            className="absolute top-full left-0 right-0 mt-2 bg-brand-card border border-gray-800 rounded-2xl overflow-hidden shadow-2xl z-50 backdrop-blur-xl"
+            className="tactical-panel-sm absolute top-full left-0 right-0 mt-2 bg-brand-card border border-gray-800 overflow-hidden shadow-2xl z-50 backdrop-blur-xl"
           >
             <div className="p-2 max-h-60 overflow-y-auto no-scrollbar">
               <button
@@ -122,9 +124,10 @@ const SearchBar: React.FC = () => {
     <div className="w-full max-w-[1400px] mx-auto -mt-10 md:-mt-14 relative z-20 px-4">
       <form
         onSubmit={handleSearch}
-        className="bg-brand-card/80 backdrop-blur-2xl p-3 rounded-3xl lg:rounded-[2.5rem] border border-white/5 shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex flex-col lg:flex-row gap-3 items-stretch"
+        className="tactical-panel relative bg-brand-card/80 backdrop-blur-2xl p-3 border border-white/5 shadow-[0_20px_50px_rgba(0,0,0,0.5)] flex flex-col lg:flex-row gap-3 items-stretch"
       >
-        <div className="flex-1 relative group bg-brand-bg/40 rounded-2xl border border-gray-800 hover:border-gray-700 transition-all focus-within:border-brand-primary focus-within:ring-4 focus-within:ring-brand-primary/10">
+        <CornerBrackets corners={["tr", "bl"]} size={16} />
+        <div className="tactical-panel-sm flex-1 relative group bg-brand-bg/40 border border-gray-800 hover:border-gray-700 transition-all focus-within:border-brand-primary focus-within:ring-4 focus-within:ring-brand-primary/10">
           <Search
             className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-brand-primary transition-colors"
             size={22}
@@ -141,28 +144,28 @@ const SearchBar: React.FC = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-row gap-3">
           <CustomDropdown
             label="Modelo"
-            options={["Fuzil", "Pistola", "Sniper", "SMG", "LMG"]}
+            options={MODEL_OPTIONS}
             value={model}
             onChange={setModel}
           />
 
           <CustomDropdown
-            label="Tipo"
-            options={["AEG", "GBB", "HPA", "Spring"]}
+            label="Sistema"
+            options={TYPE_OPTIONS}
             value={type}
             onChange={setType}
           />
 
           <CustomDropdown
             label="Categoria"
-            options={["Airsoft", "Acessórios", "Serviços", "Kits"]}
+            options={CATEGORY_OPTIONS.map((c) => c.value)}
             value={category}
             onChange={setCategory}
           />
 
           <button
             type="submit"
-            className="bg-brand-primary hover:bg-brand-primary-light text-black h-14 px-8 rounded-2xl transition-all duration-300 font-black uppercase tracking-widest flex items-center justify-center gap-3 shadow-xl shadow-white/10 hover:shadow-white/20 active:scale-95 group"
+            className="tactical-panel-sm bg-brand-primary hover:bg-brand-primary-light text-black h-14 px-8 transition-all duration-300 font-black uppercase tracking-widest flex items-center justify-center gap-3 shadow-xl shadow-white/10 hover:shadow-white/20 active:scale-95 group"
           >
             <Search
               size={22}

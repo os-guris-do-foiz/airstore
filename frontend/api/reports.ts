@@ -1,4 +1,5 @@
 import { api } from './apiClient';
+import { Paginated } from '../types';
 
 export interface Report {
   id: string;
@@ -17,18 +18,22 @@ export interface Report {
   };
 }
 
+export interface CreateReportPayload {
+  target_id: string;
+  type: 'AD' | 'FIELD' | 'USER' | 'SYSTEM';
+  reason: string;
+  description?: string;
+}
+
 export const reportsApi = {
-  getAll: () => 
-    api.get<Report[]>('/reports', {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('fronteira_token')}`
-      }
-    }),
-    
-  updateStatus: (id: string, status: 'RESOLVED' | 'DISMISSED') => 
-    api.patch<{ message: string; report: Report }>(`/reports/${id}/status`, { status }, {
-      headers: {
-        Authorization: `Bearer ${localStorage.getItem('fronteira_token')}`
-      }
-    })
+  create: (payload: CreateReportPayload) =>
+    api.post<{ message: string; report: Report }>('/reports', payload),
+
+  getAll: (params?: { status?: 'PENDING' | 'RESOLVED' | 'DISMISSED'; type?: Report['type']; page?: number; limit?: number }) =>
+    api.get<Paginated<Report>>('/reports', { params: params as any }),
+
+  getStats: () => api.get<{ total: number; pending: number; resolved: number; dismissed: number }>('/reports/stats'),
+
+  updateStatus: (id: string, status: 'RESOLVED' | 'DISMISSED') =>
+    api.patch<{ message: string; report: Report }>(`/reports/${id}/status`, { status })
 };

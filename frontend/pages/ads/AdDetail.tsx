@@ -9,15 +9,24 @@ import {
   ShieldCheck,
   Info,
   ChevronRight,
-  Share2,
   Flag,
   Crown,
   Loader2,
+  Trash2,
+  Eye,
 } from "lucide-react";
 import { Ad } from "../../types";
 import { motion, AnimatePresence } from "motion/react";
 import { adsApi } from "../../api/ads";
+import SectionMarker from "../../components/SectionMarker";
+import { toast } from "../../utils/toast";
+import { confirmDialog } from "../../utils/confirm";
 import ReportModal from "../../components/modals/ReportModal";
+import { getWear } from "../../utils/wear";
+import { PLACEHOLDER_IMG, onImgError } from "../../utils/img";
+import WearScale from "../../components/WearScale";
+import CornerBrackets from "../../components/CornerBrackets";
+import FavoriteButton from "../../components/FavoriteButton";
 
 const AdDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -32,6 +41,8 @@ const AdDetail: React.FC = () => {
   const currentUserStr = localStorage.getItem("fronteira_user");
   const currentUser = currentUserStr ? JSON.parse(currentUserStr) : null;
   const isOwner = ad && currentUser && ad.user_id === currentUser.id;
+  const isAdmin = currentUser?.roles?.includes("ADMIN");
+  const canDelete = isOwner || isAdmin;
 
   useEffect(() => {
     if (isPaused || !ad || ad.images.length <= 1) return;
@@ -65,6 +76,14 @@ const AdDetail: React.FC = () => {
     fetchAd();
   }, [id]);
 
+  useEffect(() => {
+    if (!id) return;
+    const key = `viewed_ad_${id}`;
+    if (sessionStorage.getItem(key)) return;
+    sessionStorage.setItem(key, "1");
+    adsApi.registerView(id).catch(() => {});
+  }, [id]);
+
   if (loading)
     return (
       <div className="h-screen flex items-center justify-center">
@@ -82,6 +101,9 @@ const AdDetail: React.FC = () => {
 
   const whatsappUrl = `https://wa.me/${ad.whatsapp?.replace(/\D/g, '')}?text=${encodeURIComponent(`Olá, vi seu anúncio no Fronteira Airsoft: ${ad.title}. Ainda está disponível?`)}`;
 
+  const isService = ad.category === "Serviços";
+  const wear = getWear(isService ? null : ad.condition);
+
   const nextImage = () => {
     handleInteraction();
     setActiveImage((prev) => (prev + 1) % ad.images.length);
@@ -93,30 +115,29 @@ const AdDetail: React.FC = () => {
   };
 
   const handleDelete = async () => {
-    if (window.confirm("Tem certeza que deseja apagar este anúncio definitivamente?")) {
-       try {
-         await adsApi.delete(ad.id);
-         navigate("/ads");
-       } catch (err: any) {
-         alert(err.message || "Erro ao deletar anúncio.");
-       }
+    if (!(await confirmDialog({ title: "Apagar anúncio", message: "Tem certeza que deseja apagar este anúncio definitivamente?", confirmText: "Apagar", danger: true }))) return;
+    try {
+      await adsApi.delete(ad.id);
+      toast.success("Anúncio apagado.");
+      navigate("/ads");
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao apagar anúncio.");
     }
   };
 
   const handleMarkAsSold = async () => {
-    if (window.confirm("Confirmar a venda deste equipamento? O anúncio deixará de ser visível no marketplace.")) {
-      try {
-        const updated = await adsApi.update(ad.id, { is_sold: true });
-        setAd(updated);
-      } catch (err: any) {
-        alert(err.message || "Erro ao atualizar anúncio.");
-      }
+    if (!(await confirmDialog({ title: "Marcar como vendido", message: "Confirmar a venda deste equipamento? O anúncio deixará de ser visível no marketplace.", confirmText: "Confirmar venda" }))) return;
+    try {
+      const updated = await adsApi.update(ad.id, { is_sold: true });
+      setAd(updated);
+      toast.success("Anúncio marcado como vendido.");
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao atualizar anúncio.");
     }
   };
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 space-y-8">
-      {/* Breadcrumbs & Actions */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <Link
           to="/ads"
@@ -126,24 +147,21 @@ const AdDetail: React.FC = () => {
         </Link>
         <div className="flex items-center gap-4">
           {isOwner && !ad.is_sold && (
-            <>
-              <button
-                onClick={handleMarkAsSold}
-                className="flex items-center gap-2 text-brand-green hover:text-white transition-colors text-[10px] font-black uppercase tracking-widest bg-brand-green/10 px-3 py-1.5 rounded-lg border border-brand-green/20"
-              >
-                <Flag size={14} /> Marcar como Vendido
-              </button>
-              <button
-                onClick={handleDelete}
-                className="flex items-center gap-2 text-red-500 hover:text-white transition-colors text-[10px] font-black uppercase tracking-widest bg-red-500/10 px-3 py-1.5 rounded-lg border border-red-500/20"
-              >
-                Apagar Anúncio
-              </button>
-            </>
+            <button
+              onClick={handleMarkAsSold}
+              className="flex items-center gap-2 text-brand-green hover:text-white transition-colors text-[10px] font-black uppercase tracking-widest bg-brand-green/10 px-3 py-1.5 rounded-lg border border-brand-green/20"
+            >
+              <Flag size={14} /> Marcar como Vendido
+            </button>
           )}
-          <button className="flex items-center gap-2 text-gray-500 hover:text-white transition-colors text-[10px] font-black uppercase tracking-widest">
-            <Share2 size={14} /> Compartilhar
-          </button>
+          {canDelete && (
+            <button
+              onClick={handleDelete}
+              className="flex items-center gap-2 text-red-500 hover:text-white transition-colors text-[10px] font-black uppercase tracking-widest bg-red-500/10 px-3 py-1.5 rounded-lg border border-red-500/20"
+            >
+              <Trash2 size={14} /> {isAdmin && !isOwner ? "Apagar (Admin)" : "Apagar Anúncio"}
+            </button>
+          )}
           {!isOwner && (
             <button 
               onClick={() => setIsReportModalOpen(true)}
@@ -164,19 +182,20 @@ const AdDetail: React.FC = () => {
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* Left Column: Gallery & Description (8 cols) */}
         <div className="lg:col-span-8 space-y-8">
-          {/* Premium Gallery */}
           <div className="space-y-4">
             <div
-              className={`relative aspect-[16/9] bg-brand-card rounded-3xl overflow-hidden border ${ad.is_sold ? "border-red-500/50" : ad.is_donor ? "border-yellow-500/30" : "border-brand-border"} shadow-2xl group`}
+              className={`tactical-panel relative aspect-[16/9] bg-brand-card overflow-hidden border shadow-2xl group ${ad.is_sold ? "border-red-500/50" : ad.is_donor ? "border-yellow-500/30" : !wear ? "border-brand-border" : ""}`}
+              style={!ad.is_sold && !ad.is_donor && wear ? { borderColor: `${wear.color}55`, boxShadow: `0 25px 50px -12px rgba(0,0,0,0.7), 0 0 40px -12px ${wear.color}55` } : undefined}
               onMouseEnter={() => setIsPaused(true)}
               onMouseLeave={() => setIsPaused(false)}
             >
+              <CornerBrackets corners={["tr", "bl"]} color={ad.is_donor ? "#eab308" : wear ? wear.color : "var(--color-brand-primary)"} size={22} />
               <AnimatePresence mode="wait">
                 <motion.img
                   key={activeImage}
-                  src={ad.images[activeImage]}
+                  src={ad.images?.[activeImage] || PLACEHOLDER_IMG}
+                  onError={onImgError}
                   initial={{ opacity: 0, scale: 1.1 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0 }}
@@ -195,25 +214,20 @@ const AdDetail: React.FC = () => {
                 </div>
               )}
 
-              {/* Overlay Badges */}
-              <div className="absolute top-6 left-6 flex gap-2 z-10">
+              <div className="absolute top-6 left-6 flex flex-wrap items-center gap-2 z-10">
                 {ad.is_donor && !ad.is_sold && (
-                  <span className="bg-yellow-500 text-black text-[10px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest shadow-lg flex items-center gap-2">
+                  <span className="tactical-panel-xs text-[10px] font-black px-4 py-1.5 uppercase tracking-widest shadow-lg flex items-center gap-2 backdrop-blur-md"
+                    style={{ background: "rgba(0,0,0,0.7)", color: "#eab308", border: "1px solid rgba(234,179,8,0.6)" }}>
                     <Crown size={12} fill="currentColor" />
                     Doador Premium
                   </span>
                 )}
-                <span className="bg-brand-primary text-black text-[10px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest shadow-lg">
-                  {ad.type}
+                <span className="tactical-panel-xs bg-brand-primary text-black text-[10px] font-black px-4 py-1.5 uppercase tracking-widest shadow-lg">
+                  {isService ? "Serviço" : ad.type}
                 </span>
-                {ad.category !== "Serviços" && ad.condition && ad.condition !== "N/A" && (
-                  <span className="bg-black/60 backdrop-blur-md text-white text-[10px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest border border-white/10 shadow-lg">
-                    {ad.condition}
-                  </span>
-                )}
+                {wear && <WearScale wear={wear} size="md" />}
               </div>
 
-              {/* Navigation Arrows */}
               {ad.images && ad.images.length > 1 && (
                 <>
                   <button
@@ -231,13 +245,11 @@ const AdDetail: React.FC = () => {
                 </>
               )}
 
-              {/* Counter */}
               <div className="absolute bottom-6 right-6 bg-black/60 backdrop-blur-md text-white text-[10px] font-black px-3 py-1 rounded-full border border-white/10">
                 {activeImage + 1} / {ad.images?.length || 0}
               </div>
             </div>
 
-            {/* Thumbnails */}
             {ad.images && ad.images.length > 1 && (
               <div className="flex gap-4 overflow-x-auto pb-2 no-scrollbar">
                 {ad.images.map((img, i) => (
@@ -247,7 +259,7 @@ const AdDetail: React.FC = () => {
                       setActiveImage(i);
                       handleInteraction();
                     }}
-                    className={`relative w-[100px] md:w-[140px] aspect-video shrink-0 rounded-2xl overflow-hidden border-2 transition-all ${
+                    className={`tactical-panel-xs relative w-[100px] md:w-[140px] aspect-video shrink-0 overflow-hidden border-2 transition-all ${
                       activeImage === i
                         ? "border-brand-primary scale-95 shadow-lg shadow-white/10"
                         : "border-gray-800 opacity-60 hover:opacity-100"
@@ -255,6 +267,7 @@ const AdDetail: React.FC = () => {
                   >
                     <img
                       src={img}
+                      onError={onImgError}
                       alt=""
                       className="w-full h-full object-cover"
                       referrerPolicy="no-referrer"
@@ -265,20 +278,14 @@ const AdDetail: React.FC = () => {
             )}
           </div>
 
-          {/* Description Section */}
-          <div className="bg-brand-card rounded-3xl p-8 border border-gray-800 shadow-xl space-y-8">
-            <div className="flex items-center gap-3">
-              <div className="w-1.5 h-6 bg-brand-primary rounded-full" />
-              <h2 className="text-2xl font-black text-white uppercase tracking-tight">
-                Descrição Completa
-              </h2>
-            </div>
+          <div className="tactical-panel relative bg-brand-card p-8 border border-gray-800 shadow-xl space-y-8">
+            <CornerBrackets corners={["tr", "bl"]} size={16} />
+            <SectionMarker title="Descrição Completa" />
 
             <div className="text-gray-300 whitespace-pre-wrap leading-relaxed text-lg font-medium">
               {ad.description}
             </div>
 
-            {/* Tags - O backend ainda não salva tags formalmente, mas podemos mostrar a categoria e type como tags */}
             <div className="pt-8 border-t border-gray-800">
               <h3 className="text-xs font-black text-gray-500 uppercase tracking-widest mb-4">
                 Classificação
@@ -287,7 +294,7 @@ const AdDetail: React.FC = () => {
                 {[ad.category, ad.type, ad.model, ad.brand].filter(Boolean).map((tag) => (
                   <span
                     key={tag}
-                    className="bg-brand-bg border border-gray-800 text-brand-primary-light px-4 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-brand-primary hover:text-black transition-colors cursor-default"
+                    className="tactical-panel-xs bg-brand-bg border border-gray-800 text-brand-primary-light px-4 py-1.5 text-[10px] font-black uppercase tracking-widest hover:bg-brand-primary hover:text-black transition-colors cursor-default"
                   >
                     {tag}
                   </span>
@@ -297,19 +304,28 @@ const AdDetail: React.FC = () => {
           </div>
         </div>
 
-        {/* Right Column: Pricing & Seller (4 cols) */}
         <div className="lg:col-span-4 space-y-6">
-          {/* Main Info Card */}
-          <div className="bg-brand-card rounded-3xl p-8 border border-gray-800 shadow-2xl space-y-8 sticky top-8">
+          <div className="tactical-panel relative bg-brand-card p-8 border border-gray-800 shadow-2xl space-y-8 sticky top-8">
+            <CornerBrackets corners={["tr", "bl"]} size={16} />
             <div className="space-y-4">
-              <div className="flex items-center gap-2 text-brand-primary-light text-[10px] font-black uppercase tracking-widest">
-                <Calendar size={14} />
-                Publicado em{" "}
-                {new Date(ad.created_at).toLocaleDateString("pt-BR")}
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 text-brand-primary-light text-[10px] font-black uppercase tracking-widest">
+                  <Calendar size={14} />
+                  Publicado em{" "}
+                  {new Date(ad.created_at).toLocaleDateString("pt-BR")}
+                </div>
+                {typeof ad.view_count === "number" && (
+                  <div className="flex items-center gap-1.5 text-gray-500 text-[10px] font-black uppercase tracking-widest shrink-0" title={`${ad.view_count} visualizações`}>
+                    <Eye size={14} /> {ad.view_count.toLocaleString("pt-BR")}
+                  </div>
+                )}
               </div>
-              <h1 className="text-4xl font-black text-white leading-none uppercase tracking-tighter">
-                {ad.title}
-              </h1>
+              <div className="flex items-start justify-between gap-3">
+                <h1 className="text-4xl font-black text-white leading-none uppercase tracking-tighter">
+                  {ad.title}
+                </h1>
+                <FavoriteButton adId={ad.id} size="md" className="mt-1 shrink-0" />
+              </div>
               <div className="flex items-center gap-2 text-gray-400 font-bold text-sm">
                 <MapPin size={18} className="text-brand-primary" />
                 <span>{ad.location}</span>
@@ -320,12 +336,26 @@ const AdDetail: React.FC = () => {
               <p className="text-gray-500 text-[10px] font-black uppercase tracking-widest">
                 Preço de Venda
               </p>
-              <div className="text-5xl font-black text-brand-green tracking-tighter">
-                R$ {ad.price.toLocaleString("pt-BR")}
+              <div className="text-5xl font-black text-brand-green tracking-tighter text-glow-lime">
+                <span className="text-2xl align-top mr-1 opacity-70">R$</span>
+                {Number(ad.price).toLocaleString("pt-BR")}
               </div>
             </div>
 
-            {/* Specs Grid */}
+            {wear && (
+              <div className="tactical-panel-sm bg-brand-bg/60 border border-brand-border border-l-2 p-4 space-y-3" style={{ borderLeftColor: wear.color }}>
+                <span className="text-gray-500 text-[10px] font-black uppercase tracking-widest">
+                  Estado de Conservação
+                </span>
+                <div className="flex items-center justify-between">
+                  <p className="font-black uppercase tracking-tight text-sm" style={{ color: wear.color }}>
+                    {wear.label}
+                  </p>
+                  <WearScale wear={wear} size="sm" />
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-3">
               {[
                 ...(ad.category !== "Serviços"
@@ -343,7 +373,7 @@ const AdDetail: React.FC = () => {
               ].map((spec, i) => (
                 <div
                   key={i}
-                  className="bg-brand-bg/50 p-4 rounded-2xl border border-gray-800/50"
+                  className="tactical-panel-xs bg-brand-bg/50 p-4 border border-gray-800/50"
                 >
                   <p className="text-gray-500 text-[9px] uppercase font-black tracking-widest mb-1">
                     {spec.label}
@@ -380,7 +410,6 @@ const AdDetail: React.FC = () => {
               </div>
             </div>
 
-            {/* Seller Info Mini */}
             <div className="pt-8 border-t border-gray-800 space-y-6">
               <div className="flex items-center justify-between">
                 <h3 className="text-[10px] font-black text-gray-500 uppercase tracking-widest">
@@ -401,7 +430,7 @@ const AdDetail: React.FC = () => {
                 <div className="relative">
                   <img
                     src={ad.user?.avatar || "https://picsum.photos/seed/user/200"}
-                    className={`w-16 h-16 rounded-2xl border-2 ${ad.user?.is_donor ? "border-yellow-500" : "border-brand-primary"} group-hover:border-brand-primary-light transition-all object-cover`}
+                    className={`tactical-panel-xs w-16 h-16 border-2 ${ad.user?.is_donor ? "border-yellow-500" : "border-brand-primary"} group-hover:border-brand-primary-light transition-all object-cover`}
                     referrerPolicy="no-referrer"
                   />
                   <div
@@ -443,7 +472,7 @@ const AdDetail: React.FC = () => {
                 </div>
               </Link>
 
-              <div className="bg-brand-primary/5 border border-brand-primary/10 rounded-2xl p-4 flex gap-3">
+              <div className="tactical-panel-sm bg-brand-primary/5 border border-brand-primary/10 p-4 flex gap-3">
                 <Info className="text-brand-primary-light shrink-0" size={18} />
                 <p className="text-[10px] text-gray-400 leading-relaxed font-bold">
                   Dica: Nunca faça pagamentos antecipados sem ver o equipamento

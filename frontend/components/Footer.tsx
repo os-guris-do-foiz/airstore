@@ -23,8 +23,8 @@ const Footer: React.FC = () => {
             A fronteira definitiva para entusiastas de Airsoft. Encontre
             equipamentos, serviços e times.
           </p>
-          <div className="bg-brand-bg/50 border border-brand-border p-4 rounded-2xl flex items-center gap-4 max-w-sm">
-            <div className="w-10 h-10 bg-red-500/10 rounded-xl flex items-center justify-center text-red-500">
+          <div className="tactical-panel-sm bg-brand-bg/50 border border-brand-border p-4 flex items-center gap-4 max-w-sm">
+            <div className="tactical-panel-xs w-10 h-10 bg-red-500/10 flex items-center justify-center text-red-500">
               <Heart size={20} className="fill-red-500" />
             </div>
             <div className="flex-1">

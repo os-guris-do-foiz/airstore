@@ -2,6 +2,8 @@ import React from "react";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
 import DonationWidget from "../components/DonationWidget";
+import Toaster from "../components/Toaster";
+import ConfirmDialog from "../components/ConfirmDialog";
 
 interface MainLayoutProps {
   children: React.ReactNode;
@@ -16,6 +18,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({ children }) => {
       </main>
       <DonationWidget />
       <Footer />
+      <Toaster />
+      <ConfirmDialog />
     </div>
   );
 };

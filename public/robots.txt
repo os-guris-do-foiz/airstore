@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+
+Disallow: /admin
+Disallow: /configuracoes
+Disallow: /painel-campo
+Disallow: /verificar-email
+Disallow: /recuperar-senha
+Disallow: /api/
+
+Sitemap: https://fronteiraairsoft.com.br/sitemap.xml

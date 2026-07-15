@@ -11,7 +11,6 @@ import { motion } from "motion/react";
 const Avisos: React.FC = () => {
   return (
     <div className="min-h-screen pb-20">
-      {/* Hero */}
       <section className="py-20 text-center">
         <motion.div
           initial={{ opacity: 0, scale: 0.9 }}
@@ -28,7 +27,6 @@ const Avisos: React.FC = () => {
         </p>
       </section>
 
-      {/* Concept Section */}
       <section className="max-w-6xl mx-auto px-4">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center bg-brand-card border border-white/5 rounded-[3rem] p-12 overflow-hidden relative">
           <div className="absolute top-0 right-0 w-96 h-96 bg-brand-primary/5 blur-[120px] -mr-48 -mt-48" />

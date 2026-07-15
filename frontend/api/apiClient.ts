@@ -21,7 +21,6 @@ export async function apiFetch<T>(endpoint: string, options: FetchOptions = {}):
   const isFormData = data instanceof FormData;
   const headers: Record<string, string> = {};
 
-  // 🛡️ O SEGREDO QUE FALTAVA: Anexar o token de segurança 🛡️
   const token = localStorage.getItem("fronteira_token");
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
@@ -46,13 +45,26 @@ export async function apiFetch<T>(endpoint: string, options: FetchOptions = {}):
   }
 
   const response = await fetch(url, config);
-  const result = await response.json();
 
-  if (response.ok) {
-    return result;
+  const text = await response.text();
+  let result: any = null;
+  if (text) {
+    try {
+      result = JSON.parse(text);
+    } catch {
+      result = text; // corpo não-JSON (ex: erro em HTML)
+    }
   }
 
-  throw new Error(result.error || result.message || 'Erro na requisição');
+  if (response.ok) {
+    return result as T;
+  }
+
+  const message = (result && (result.error || result.message)) || 'Erro na requisição';
+  const error = new Error(message) as Error & { status?: number; code?: string };
+  error.status = response.status;
+  if (result && result.code) error.code = result.code;
+  throw error;
 }
 
 export const api = {

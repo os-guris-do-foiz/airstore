@@ -1,15 +1,21 @@
 import React, { useState, useEffect } from "react";
-import { 
-  ShieldAlert, ShieldCheck, UserCog, Search, Filter, 
-  MoreVertical, Check, BadgeCheck, Store, User, X,
+import {
+  ShieldAlert, ShieldCheck, UserCog, Search,
+  Check, BadgeCheck, Store, User, X,
   AlertTriangle, Flag, ExternalLink, CheckCircle2, Ban,
-  Loader2
+  Loader2, MapPinned, Trash2, Settings, Plus, Minus, Eye, Users as UsersIcon,
+  Heart, Crown,
 } from "lucide-react";
 import { reportsApi, Report } from "../../api/reports";
-import { usersApi, AppUser, UserRole, UserStatus } from "../../api/users";
-import { Link } from "react-router-dom";
+import { usersApi, AppUser, UserRole, UserStatus, UserFilter } from "../../api/users";
+import { fieldsApi, Field } from "../../api/fields";
+import { donationsApi, REAIS_PER_WEEK } from "../../api/donations";
+import { toast } from "../../utils/toast";
+import { confirmDialog } from "../../utils/confirm";
+import { Link, useNavigate } from "react-router-dom";
+import Pagination from "../../components/Pagination";
+import CornerBrackets from "../../components/CornerBrackets";
 
-// 🛡️ TRAVA 1: Se 'roles' vier vazio, assume uma lista vazia []
 const RoleBadges = ({ roles = [] }: { roles: UserRole[] }) => {
   return (
     <div className="flex flex-wrap gap-1">
@@ -27,28 +33,108 @@ const RoleBadges = ({ roles = [] }: { roles: UserRole[] }) => {
 };
 
 const AdminDashboard: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<"users" | "reports">("users");
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<"users" | "fields" | "reports">("users");
   const [users, setUsers] = useState<AppUser[]>([]);
   const [reports, setReports] = useState<Report[]>([]);
+  const [fields, setFields] = useState<Field[]>([]);
   const [loadingReports, setLoadingReports] = useState(false);
   const [loadingUsers, setLoadingUsers] = useState(false);
+  const [loadingFields, setLoadingFields] = useState(false);
   const [search, setSearch] = useState("");
-  
+  const [roleFilter, setRoleFilter] = useState<UserFilter | null>(null);
+  const [userPage, setUserPage] = useState(1);
+  const [userTotalPages, setUserTotalPages] = useState(1);
+  const [userStats, setUserStats] = useState({ total: 0, fieldOwners: 0, premium: 0, admins: 0, banned: 0, active: 0 });
+
   const [editingUser, setEditingUser] = useState<AppUser | null>(null);
+  const [editLimit, setEditLimit] = useState(0);
+
+  const [donationUser, setDonationUser] = useState<AppUser | null>(null);
+  const [donationAmount, setDonationAmount] = useState("10");
+  const [savingDonation, setSavingDonation] = useState(false);
+
+  const [fieldSearch, setFieldSearch] = useState("");
+  const [fieldOwnerFilter, setFieldOwnerFilter] = useState<"owned" | "unowned" | null>(null);
+  const [fieldPage, setFieldPage] = useState(1);
+  const [fieldTotalPages, setFieldTotalPages] = useState(1);
+  const [fieldStats, setFieldStats] = useState({ total: 0, unowned: 0 });
+
+  const [reportStatusFilter, setReportStatusFilter] = useState<"PENDING" | "RESOLVED" | "DISMISSED" | null>(null);
+  const [reportTypeFilter, setReportTypeFilter] = useState<"AD" | "FIELD" | "USER" | "SYSTEM" | null>(null);
+  const [reportPage, setReportPage] = useState(1);
+  const [reportTotalPages, setReportTotalPages] = useState(1);
+  const [reportStats, setReportStats] = useState({ total: 0, pending: 0, resolved: 0, dismissed: 0 });
 
   useEffect(() => {
-    if (activeTab === "reports") {
-      fetchReports();
-    } else {
-      fetchUsers();
+    setUserPage(1);
+  }, [search, roleFilter]);
+  useEffect(() => {
+    setFieldPage(1);
+  }, [fieldSearch, fieldOwnerFilter]);
+  useEffect(() => {
+    setReportPage(1);
+  }, [reportStatusFilter, reportTypeFilter]);
+
+  useEffect(() => {
+    if (activeTab !== "users") return;
+    const t = setTimeout(() => fetchUsers(), 300);
+    return () => clearTimeout(t);
+  }, [activeTab, search, roleFilter, userPage]);
+
+  useEffect(() => {
+    if (activeTab !== "fields") return;
+    const t = setTimeout(() => fetchFields(), 300);
+    return () => clearTimeout(t);
+  }, [activeTab, fieldSearch, fieldOwnerFilter, fieldPage]);
+
+  useEffect(() => {
+    if (activeTab !== "reports") return;
+    fetchReports();
+  }, [activeTab, reportStatusFilter, reportTypeFilter, reportPage]);
+
+  useEffect(() => {
+    usersApi.getStats().then(setUserStats).catch(() => {});
+  }, [users]);
+
+  useEffect(() => {
+    if (activeTab === "fields") fieldsApi.getStats().then(setFieldStats).catch(() => {});
+  }, [activeTab, fields]);
+
+  const fetchFields = async () => {
+    setLoadingFields(true);
+    try {
+      const data = await fieldsApi.getAll({
+        search: fieldSearch.trim() || undefined,
+        ownerFilter: fieldOwnerFilter || undefined,
+        page: fieldPage,
+      });
+      setFields(data.items);
+      setFieldTotalPages(data.totalPages);
+    } catch (err) {
+      console.error("Erro ao buscar campos:", err);
+    } finally {
+      setLoadingFields(false);
     }
-  }, [activeTab]);
+  };
+
+  const deleteField = async (id: string, name: string) => {
+    if (!(await confirmDialog({ title: "Excluir campo", message: `Excluir o campo "${name}"? Todas as partidas serão removidas.`, confirmText: "Excluir", danger: true }))) return;
+    try {
+      await fieldsApi.delete(id);
+      setFields((prev) => prev.filter((f) => f.id !== id));
+      toast.success(`Campo "${name}" excluído.`);
+    } catch (err: any) {
+      toast.error(err.message || "Falha ao excluir o campo.");
+    }
+  };
 
   const fetchUsers = async () => {
     setLoadingUsers(true);
     try {
-      const data = await usersApi.getAll();
-      setUsers(data);
+      const data = await usersApi.getAll({ search: search.trim() || undefined, page: userPage, filter: roleFilter || undefined });
+      setUsers(data.items);
+      setUserTotalPages(data.totalPages);
     } catch (err) {
       console.error("Erro ao buscar usuários:", err);
     } finally {
@@ -59,8 +145,14 @@ const AdminDashboard: React.FC = () => {
   const fetchReports = async () => {
     setLoadingReports(true);
     try {
-      const data = await reportsApi.getAll();
-      setReports(data);
+      const data = await reportsApi.getAll({
+        status: reportStatusFilter || undefined,
+        type: reportTypeFilter || undefined,
+        page: reportPage,
+      });
+      setReports(data.items);
+      setReportTotalPages(data.totalPages);
+      reportsApi.getStats().then(setReportStats).catch(() => {});
     } catch (err) {
       console.error("Erro ao buscar reports:", err);
     } finally {
@@ -71,40 +163,78 @@ const AdminDashboard: React.FC = () => {
   const handleUpdateReportStatus = async (id: string, status: 'RESOLVED' | 'DISMISSED') => {
     try {
       await reportsApi.updateStatus(id, status);
-      setReports(prev => prev.map(r => r.id === id ? { ...r, status } : r));
-    } catch (err) {
-      console.error("Erro ao atualizar report:", err);
+      await fetchReports();
+      toast.success("Denúncia resolvida.");
+    } catch (err: any) {
+      toast.error(err.message || "Falha ao atualizar a denúncia.");
     }
   };
 
-  // 🛡️ TRAVA 2: Evita crash se o usuário não tiver nome ou email
-  const filteredUsers = users.filter(u => 
-    (u.name || "").toLowerCase().includes(search.toLowerCase()) || 
-    (u.email || "").toLowerCase().includes(search.toLowerCase())
-  );
-
   const toggleRoleForEditingUser = (role: UserRole) => {
     if (!editingUser) return;
-    // 🛡️ TRAVA 3: Garante que os cargos existam antes de usar .includes
     const currentRoles = editingUser.roles || [];
-    const newRoles = currentRoles.includes(role) 
-      ? currentRoles.filter(r => r !== role)
-      : [...currentRoles, role];
-    
+    const adding = !currentRoles.includes(role);
+    const newRoles = adding
+      ? [...currentRoles, role]
+      : currentRoles.filter(r => r !== role);
+
     if (newRoles.length === 0) newRoles.push("USER");
+
+    if (role === "FIELD_OWNER" && adding && editLimit <= 0) {
+      setEditLimit(1);
+    }
 
     const updatedUser = { ...editingUser, roles: newRoles as UserRole[] };
     setEditingUser(updatedUser);
   };
 
+  const openEditor = (user: AppUser) => {
+    setEditingUser({ ...user });
+    setEditLimit(user.field_limit ?? 0);
+  };
+
   const saveRoles = async () => {
     if (!editingUser) return;
+    const isOwner = (editingUser.roles || []).includes("FIELD_OWNER");
+    const limit = isOwner ? editLimit : 0;
     try {
-      await usersApi.updateRoles(editingUser.id, editingUser.roles);
-      setUsers(users.map(u => u.id === editingUser.id ? editingUser : u));
+      await usersApi.updateRoles(editingUser.id, editingUser.roles, limit);
+      const updated = { ...editingUser, field_limit: limit };
+      setUsers(users.map(u => u.id === editingUser.id ? updated : u));
       setEditingUser(null);
-    } catch (err) {
-      console.error("Erro ao salvar cargos:", err);
+      toast.success("Cargos atualizados.");
+    } catch (err: any) {
+      toast.error(err.message || "Falha ao salvar cargos.");
+    }
+  };
+
+  const openDonationModal = (user: AppUser) => {
+    setDonationUser(user);
+    setDonationAmount(String(REAIS_PER_WEEK));
+  };
+
+  const saveDonation = async () => {
+    if (!donationUser) return;
+    const amount = Number(donationAmount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast.error("Informe um valor válido.");
+      return;
+    }
+    setSavingDonation(true);
+    try {
+      await donationsApi.registerManual({ userId: donationUser.id, amount });
+      const weeks = Math.floor(amount / REAIS_PER_WEEK);
+      toast.success(
+        weeks > 0
+          ? `Doação registrada! ${donationUser.name} ganhou ${weeks} semana(s) de destaque.`
+          : `Doação registrada, mas menos de R$${REAIS_PER_WEEK} não gera tempo de destaque.`
+      );
+      setDonationUser(null);
+      fetchUsers();
+    } catch (err: any) {
+      toast.error(err.message || "Falha ao registrar a doação.");
+    } finally {
+      setSavingDonation(false);
     }
   };
 
@@ -115,14 +245,14 @@ const AdminDashboard: React.FC = () => {
     try {
       await usersApi.updateStatus(userId, newStatus);
       setUsers(users.map(u => u.id === userId ? { ...u, status: newStatus } : u));
-    } catch (err) {
-      console.error("Erro ao alternar status do usuário:", err);
+      toast.success(newStatus === 'BANNED' ? "Usuário banido." : "Usuário reabilitado.");
+    } catch (err: any) {
+      toast.error(err.message || "Falha ao alterar status.");
     }
   };
 
   return (
     <div className="min-h-screen font-sans pb-20 px-4 md:px-8 max-w-7xl mx-auto pt-24">
-      {/* Header */}
       <div className="mb-10 flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div>
           <h1 className="text-4xl font-black text-white uppercase tracking-tight flex items-center gap-3">
@@ -132,23 +262,31 @@ const AdminDashboard: React.FC = () => {
           <p className="text-gray-400 mt-2 text-sm">Painel exclusivo da Administração.</p>
         </div>
 
-        <div className="flex bg-brand-card border border-brand-border p-1.5 rounded-2xl">
+        <div className="flex bg-brand-card border border-brand-border p-1.5 tactical-panel-sm">
           <button
             onClick={() => setActiveTab("users")}
-            className={`px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${
+            className={`px-5 py-3 tactical-panel-xs text-xs font-black uppercase tracking-widest transition-all flex items-center gap-2 ${
               activeTab === "users" ? "bg-brand-primary text-black" : "text-gray-500 hover:text-white"
             }`}
           >
-            Usuários
+            <UsersIcon size={14} /> Usuários
+          </button>
+          <button
+            onClick={() => setActiveTab("fields")}
+            className={`px-5 py-3 tactical-panel-xs text-xs font-black uppercase tracking-widest transition-all flex items-center gap-2 ${
+              activeTab === "fields" ? "bg-brand-primary text-black" : "text-gray-500 hover:text-white"
+            }`}
+          >
+            <MapPinned size={14} /> Campos
           </button>
           <button
             onClick={() => setActiveTab("reports")}
-            className={`px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all flex items-center gap-2 ${
+            className={`px-5 py-3 tactical-panel-xs text-xs font-black uppercase tracking-widest transition-all flex items-center gap-2 ${
               activeTab === "reports" ? "bg-red-500 text-white shadow-lg shadow-red-500/20" : "text-gray-500 hover:text-white"
             }`}
           >
-            Denúncias
-            {reports.filter(r => r.status === 'PENDING').length > 0 && (
+            <Flag size={14} /> Denúncias
+            {reportStats.pending > 0 && (
               <span className="w-2 h-2 bg-white rounded-full animate-pulse" />
             )}
           </button>
@@ -157,25 +295,42 @@ const AdminDashboard: React.FC = () => {
 
       {activeTab === "users" ? (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-            <div className="bg-brand-card border border-brand-border rounded-2xl p-4">
-              <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-1">Total Usuários</p>
-              <p className="text-2xl font-black text-white">{users.length}</p>
-            </div>
-            <div className="bg-brand-card border border-brand-border rounded-2xl p-4">
-              <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-1">Parceiros</p>
-              {/* 🛡️ TRAVA 4: .includes protegido */}
-              <p className="text-2xl font-black text-brand-primary">{users.filter(u => (u.roles || []).includes('FIELD_OWNER')).length}</p>
-            </div>
-            <div className="bg-brand-card border border-brand-border rounded-2xl p-4">
-              <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-1">Doadores</p>
-              <p className="text-2xl font-black text-yellow-500">{users.filter(u => (u.roles || []).includes('PREMIUM')).length}</p>
-            </div>
-            <div className="bg-brand-card border border-brand-border rounded-2xl p-4">
-              <p className="text-red-500/80 text-[10px] font-bold uppercase tracking-widest mb-1">Banidos</p>
-              <p className="text-2xl font-black text-red-500">{users.filter(u => u.status === 'BANNED').length}</p>
-            </div>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+            {([
+              { key: null, label: "Total Usuários", value: userStats.total, color: "text-white" },
+              { key: "ACTIVE" as UserFilter, label: "Ativos", value: userStats.active, color: "text-brand-green" },
+              { key: "FIELD_OWNER" as UserFilter, label: "Parceiros", value: userStats.fieldOwners, color: "text-brand-primary" },
+              { key: "PREMIUM" as UserFilter, label: "Doadores", value: userStats.premium, color: "text-yellow-500" },
+              { key: "ADMIN" as UserFilter, label: "Admins", value: userStats.admins, color: "text-purple-400" },
+              { key: "BANNED" as UserFilter, label: "Banidos", value: userStats.banned, color: "text-red-500" },
+            ]).map((card) => {
+              const isActive = roleFilter === card.key;
+              return (
+                <button
+                  key={card.label}
+                  onClick={() => setRoleFilter(card.key)}
+                  className={`text-left bg-brand-card border tactical-panel-sm p-4 transition-all ${
+                    isActive ? "border-brand-primary ring-1 ring-brand-primary shadow-lg shadow-brand-primary/10" : "border-brand-border hover:border-gray-600"
+                  }`}
+                >
+                  <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-1">{card.label}</p>
+                  <p className={`text-2xl font-black ${card.color}`}>{card.value}</p>
+                </button>
+              );
+            })}
           </div>
+
+          {roleFilter && (
+            <div className="flex items-center gap-2 mb-4 -mt-4">
+              <span className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">Filtro ativo</span>
+              <button
+                onClick={() => setRoleFilter(null)}
+                className="flex items-center gap-1 bg-brand-primary/10 text-brand-primary border border-brand-primary/30 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest hover:bg-brand-primary/20 transition-colors"
+              >
+                <X size={10} /> Limpar
+              </button>
+            </div>
+          )}
 
           <div className="relative mb-6">
             <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
@@ -184,11 +339,11 @@ const AdminDashboard: React.FC = () => {
               placeholder="Buscar por nome ou e-mail..." 
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-brand-card border border-brand-border rounded-xl pl-12 pr-4 py-3 text-white focus:border-brand-primary outline-none"
+              className="w-full bg-brand-card border border-brand-border tactical-panel-xs pl-12 pr-4 py-3 text-white focus:border-brand-primary outline-none"
             />
           </div>
 
-          <div className="bg-brand-card border border-brand-border rounded-[2rem] overflow-hidden">
+          <div className="bg-brand-card border border-brand-border tactical-panel overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
@@ -200,7 +355,7 @@ const AdminDashboard: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-brand-border">
-                  {filteredUsers.map(user => (
+                  {users.map(user => (
                     <tr key={user.id} className="hover:bg-white/5 transition-colors">
                       <td className="p-6">
                         <div className="flex items-center gap-3">
@@ -215,6 +370,16 @@ const AdminDashboard: React.FC = () => {
                       </td>
                       <td className="p-6">
                         <RoleBadges roles={user.roles || []} />
+                        {(user.roles || []).includes("FIELD_OWNER") && (
+                          <span className="inline-flex items-center gap-1 mt-1 text-[9px] font-black uppercase tracking-widest text-gray-500">
+                            <Store size={9} /> Limite: {user.field_limit ?? 0} campo(s)
+                          </span>
+                        )}
+                        {user.is_donor && user.donor_expiry && (
+                          <span className="flex items-center gap-1 mt-1 text-[9px] font-black uppercase tracking-widest text-yellow-500">
+                            <Crown size={9} fill="currentColor" /> Até {new Date(user.donor_expiry).toLocaleDateString("pt-BR")}
+                          </span>
+                        )}
                       </td>
                       <td className="p-6">
                         {user.status === 'ACTIVE' ? (
@@ -225,17 +390,23 @@ const AdminDashboard: React.FC = () => {
                       </td>
                       <td className="p-6 text-right">
                         <div className="flex justify-end gap-2">
-                          <button 
-                              onClick={() => setEditingUser({...user})}
+                          <button
+                              onClick={() => openEditor(user)}
                               disabled={user.email === 'admin@fronteira.com'}
-                              className="bg-brand-bg border border-brand-border hover:border-brand-primary text-gray-300 hover:text-brand-primary px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors disabled:opacity-30"
+                              className="bg-brand-bg border border-brand-border hover:border-brand-primary text-gray-300 hover:text-brand-primary px-3 py-1.5 tactical-panel-xs text-[10px] font-bold uppercase tracking-widest transition-colors disabled:opacity-30"
                             >
                               Cargos
                             </button>
-                            <button 
+                            <button
+                              onClick={() => openDonationModal(user)}
+                              className="bg-brand-bg border border-brand-border hover:border-yellow-500 hover:text-yellow-500 text-gray-300 px-3 py-1.5 tactical-panel-xs text-[10px] font-bold uppercase tracking-widest transition-colors flex items-center gap-1"
+                            >
+                              <Heart size={11} /> Doação
+                            </button>
+                            <button
                               onClick={() => toggleStatus(user.id)}
                               disabled={user.email === 'admin@fronteira.com'}
-                              className="bg-brand-bg border border-brand-border hover:border-red-500 hover:text-red-500 px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest text-gray-300 transition-colors disabled:opacity-30"
+                              className="bg-brand-bg border border-brand-border hover:border-red-500 hover:text-red-500 px-3 py-1.5 tactical-panel-xs text-[10px] font-bold uppercase tracking-widest text-gray-300 transition-colors disabled:opacity-30"
                             >
                               {user.status === 'ACTIVE' ? 'Banir' : 'Reabilitar'}
                             </button>
@@ -247,25 +418,160 @@ const AdminDashboard: React.FC = () => {
               </table>
             </div>
           </div>
+          <Pagination page={userPage} totalPages={userTotalPages} onChange={setUserPage} />
+        </>
+      ) : activeTab === "fields" ? (
+        <>
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+            <div className="grid grid-cols-2 gap-4 flex-1 max-w-md w-full">
+              <button
+                onClick={() => setFieldOwnerFilter(null)}
+                className={`text-left bg-brand-card border tactical-panel-sm p-4 transition-all ${fieldOwnerFilter === null ? "border-brand-primary ring-1 ring-brand-primary" : "border-brand-border hover:border-gray-600"}`}
+              >
+                <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-1">Total Campos</p>
+                <p className="text-2xl font-black text-white">{fieldStats.total}</p>
+              </button>
+              <button
+                onClick={() => setFieldOwnerFilter(fieldOwnerFilter === "unowned" ? null : "unowned")}
+                className={`text-left bg-brand-card border tactical-panel-sm p-4 transition-all ${fieldOwnerFilter === "unowned" ? "border-brand-primary ring-1 ring-brand-primary" : "border-brand-border hover:border-gray-600"}`}
+              >
+                <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-1">Sem Dono</p>
+                <p className="text-2xl font-black text-yellow-500">{fieldStats.unowned}</p>
+              </button>
+            </div>
+            <button
+              onClick={() => navigate("/campos/novo")}
+              className="bg-brand-primary text-black hover:bg-brand-primary-light px-5 py-3 tactical-panel-xs text-xs font-black uppercase tracking-widest flex items-center gap-2 transition-colors shrink-0"
+            >
+              <Plus size={16} /> Novo Campo
+            </button>
+          </div>
+
+          <div className="relative mb-6">
+            <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
+            <input
+              type="text"
+              placeholder="Buscar por nome ou localização..."
+              value={fieldSearch}
+              onChange={(e) => setFieldSearch(e.target.value)}
+              className="w-full bg-brand-card border border-brand-border tactical-panel-xs pl-12 pr-4 py-3 text-white focus:border-brand-primary outline-none"
+            />
+          </div>
+
+          <div className="bg-brand-card border border-brand-border tactical-panel overflow-hidden">
+            {loadingFields ? (
+              <div className="p-20 flex flex-col items-center justify-center space-y-4">
+                <Loader2 className="animate-spin text-brand-primary" size={40} />
+                <p className="text-gray-500 font-bold text-xs uppercase tracking-widest">Carregando...</p>
+              </div>
+            ) : fields.length === 0 ? (
+              <div className="p-20 text-center space-y-4">
+                <MapPinned className="mx-auto text-brand-border" size={60} />
+                <h3 className="text-xl font-black text-white uppercase">
+                  {fieldStats.total === 0 ? "Nenhum campo cadastrado" : "Nenhum campo encontrado"}
+                </h3>
+                <p className="text-gray-500">
+                  {fieldStats.total === 0 ? 'Clique em "Novo Campo" para começar.' : "Tente outro filtro ou busca."}
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-white/5 border-b border-brand-border text-[10px] uppercase tracking-widest text-gray-500">
+                      <th className="p-6 font-bold">Campo</th>
+                      <th className="p-6 font-bold">Donos</th>
+                      <th className="p-6 font-bold">Preço</th>
+                      <th className="p-6 font-bold text-right">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-brand-border">
+                    {fields.map(field => (
+                      <tr key={field.id} className="hover:bg-white/5 transition-colors">
+                        <td className="p-6">
+                          <div className="flex flex-col">
+                            <span className="font-bold text-white tracking-tight">{field.name}</span>
+                            <span className="text-[10px] text-gray-500 uppercase tracking-widest">{field.location}</span>
+                          </div>
+                        </td>
+                        <td className="p-6">
+                          {field.owner_names.length === 0 ? (
+                            <span className="bg-yellow-500/10 text-yellow-500 px-2 py-1 rounded text-[10px] font-black uppercase tracking-widest">Sem dono</span>
+                          ) : (
+                            <div className="flex flex-wrap gap-1">
+                              {field.owner_names.map((n, i) => (
+                                <span key={i} className="flex items-center gap-1 bg-brand-primary/15 text-brand-primary px-2 py-1 rounded text-[10px] font-black tracking-widest"><Store size={10} /> {n}</span>
+                              ))}
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-6">
+                          <span className="text-brand-green font-black">R$ {field.base_price}</span>
+                          <span className="text-gray-500 text-[10px]"> +{field.rental_price} loc.</span>
+                        </td>
+                        <td className="p-6 text-right">
+                          <div className="flex justify-end gap-2">
+                            <Link to={`/campos/${field.id}`} className="p-2 bg-brand-bg border border-brand-border hover:border-brand-primary text-gray-300 hover:text-brand-primary tactical-panel-xs transition-colors" title="Ver"><Eye size={16} /></Link>
+                            <Link to={`/painel-campo/config/${field.id}`} className="p-2 bg-brand-bg border border-brand-border hover:border-brand-primary text-gray-300 hover:text-brand-primary tactical-panel-xs transition-colors" title="Editar / Donos"><Settings size={16} /></Link>
+                            <button onClick={() => deleteField(field.id, field.name)} className="p-2 bg-brand-bg border border-brand-border hover:border-red-500 hover:text-red-500 text-gray-300 tactical-panel-xs transition-colors" title="Excluir"><Trash2 size={16} /></button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+          <Pagination page={fieldPage} totalPages={fieldTotalPages} onChange={setFieldPage} />
         </>
       ) : (
         <>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
-            <div className="bg-brand-card border border-brand-border rounded-2xl p-4">
-              <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-1">Pendentes</p>
-              <p className="text-2xl font-black text-red-500">{reports.filter(r => r.status === 'PENDING').length}</p>
-            </div>
-            <div className="bg-brand-card border border-brand-border rounded-2xl p-4">
-              <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-1">Resolvidos</p>
-              <p className="text-2xl font-black text-brand-green">{reports.filter(r => r.status === 'RESOLVED').length}</p>
-            </div>
-            <div className="bg-brand-card border border-brand-border rounded-2xl p-4">
-              <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-1">Total</p>
-              <p className="text-2xl font-black text-white">{reports.length}</p>
-            </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            {([
+              { key: null, label: "Total", value: reportStats.total, color: "text-white" },
+              { key: "PENDING" as const, label: "Pendentes", value: reportStats.pending, color: "text-red-500" },
+              { key: "RESOLVED" as const, label: "Resolvidos", value: reportStats.resolved, color: "text-brand-green" },
+              { key: "DISMISSED" as const, label: "Ignorados", value: reportStats.dismissed, color: "text-gray-400" },
+            ]).map((card) => {
+              const active = reportStatusFilter === card.key;
+              return (
+                <button
+                  key={card.label}
+                  onClick={() => setReportStatusFilter(card.key)}
+                  className={`text-left bg-brand-card border tactical-panel-sm p-4 transition-all ${active ? "border-brand-primary ring-1 ring-brand-primary" : "border-brand-border hover:border-gray-600"}`}
+                >
+                  <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest mb-1">{card.label}</p>
+                  <p className={`text-2xl font-black ${card.color}`}>{card.value}</p>
+                </button>
+              );
+            })}
           </div>
 
-          <div className="bg-brand-card border border-brand-border rounded-[2rem] overflow-hidden">
+          <div className="flex flex-wrap gap-2 mb-6">
+            {([
+              { key: null, label: "Todos os Tipos" },
+              { key: "AD" as const, label: "Anúncio" },
+              { key: "FIELD" as const, label: "Campo" },
+              { key: "USER" as const, label: "Usuário" },
+              { key: "SYSTEM" as const, label: "Sistema" },
+            ]).map((t) => {
+              const active = reportTypeFilter === t.key;
+              return (
+                <button
+                  key={t.label}
+                  onClick={() => setReportTypeFilter(t.key)}
+                  className={`tactical-panel-xs px-3 py-1.5 text-[10px] font-black uppercase tracking-widest border transition-colors ${
+                    active ? "bg-brand-primary text-black border-brand-primary" : "bg-brand-card border-brand-border text-gray-400 hover:text-white hover:border-gray-600"
+                  }`}
+                >
+                  {t.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="bg-brand-card border border-brand-border tactical-panel overflow-hidden">
             {loadingReports ? (
               <div className="p-20 flex flex-col items-center justify-center space-y-4">
                 <Loader2 className="animate-spin text-brand-primary" size={40} />
@@ -274,8 +580,12 @@ const AdminDashboard: React.FC = () => {
             ) : reports.length === 0 ? (
               <div className="p-20 text-center space-y-4">
                 <ShieldCheck className="mx-auto text-brand-green/30" size={60} />
-                <h3 className="text-xl font-black text-white uppercase">Tudo Limpo</h3>
-                <p className="text-gray-500">Sem denúncias no momento.</p>
+                <h3 className="text-xl font-black text-white uppercase">
+                  {reportStats.total === 0 ? "Tudo Limpo" : "Nenhuma denúncia encontrada"}
+                </h3>
+                <p className="text-gray-500">
+                  {reportStats.total === 0 ? "Sem denúncias no momento." : "Tente outro filtro."}
+                </p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -350,17 +660,11 @@ const AdminDashboard: React.FC = () => {
                         <td className="p-6 text-right">
                            {report.status === 'PENDING' && (
                               <div className="flex justify-end gap-2">
-                                 <button 
+                                 <button
                                     onClick={() => handleUpdateReportStatus(report.id, 'RESOLVED')}
-                                    className="p-2 bg-brand-green/10 text-brand-green hover:bg-brand-green hover:text-white rounded-lg transition-all"
+                                    className="px-3 py-2 bg-brand-green/10 text-brand-green hover:bg-brand-green hover:text-black tactical-panel-xs transition-all flex items-center gap-2 text-[10px] font-black uppercase tracking-widest"
                                  >
-                                    <CheckCircle2 size={18} />
-                                 </button>
-                                 <button 
-                                    onClick={() => handleUpdateReportStatus(report.id, 'DISMISSED')}
-                                    className="p-2 bg-gray-500/10 text-gray-500 hover:bg-gray-500 hover:text-white rounded-lg transition-all"
-                                 >
-                                    <Ban size={18} />
+                                    <CheckCircle2 size={16} /> Resolver
                                  </button>
                               </div>
                            )}
@@ -372,14 +676,15 @@ const AdminDashboard: React.FC = () => {
               </div>
             )}
           </div>
+          <Pagination page={reportPage} totalPages={reportTotalPages} onChange={setReportPage} />
         </>
       )}
 
-      {/* Editing Modal for Multiple Roles */}
       {editingUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setEditingUser(null)} />
-          <div className="bg-brand-card w-full max-w-lg rounded-[2rem] border border-brand-border p-8 relative z-10">
+          <div className="bg-brand-card w-full max-w-lg tactical-panel border border-brand-border p-8 relative z-10">
+          <CornerBrackets corners={["tr", "bl"]} size={16} />
             <h3 className="text-2xl font-black text-white uppercase tracking-tight mb-2">Modificar Credenciais</h3>
             <p className="text-gray-400 text-sm mb-6 font-bold">Editando: <span className="text-brand-primary">{editingUser.name}</span></p>
             
@@ -390,13 +695,12 @@ const AdminDashboard: React.FC = () => {
                 { role: "FIELD_OWNER", title: "Dono de Campo", icon: <Store className="text-brand-primary" /> },
                 { role: "ADMIN", title: "Administrador", icon: <ShieldAlert className="text-red-500" /> }
               ].map(r => {
-                // 🛡️ TRAVA 5: Blindado no modal de edição
                 const hasRole = (editingUser.roles || []).includes(r.role as UserRole);
                 return (
                   <button
                     key={r.role}
                     onClick={() => toggleRoleForEditingUser(r.role as UserRole)}
-                    className={`w-full text-left flex items-center gap-4 p-4 rounded-xl border transition-all ${
+                    className={`w-full text-left flex items-center gap-4 p-4 tactical-panel-xs border transition-all ${
                       hasRole ? "bg-brand-primary/10 border-brand-primary" : "bg-brand-bg border-brand-border hover:border-gray-600"
                     }`}
                   >
@@ -408,12 +712,88 @@ const AdminDashboard: React.FC = () => {
               })}
             </div>
 
+            {(editingUser.roles || []).includes("FIELD_OWNER") && (
+              <div className="mt-4 bg-brand-bg border border-brand-primary/30 tactical-panel-xs p-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <Store size={14} className="text-brand-primary" />
+                  <span className="text-xs font-black uppercase tracking-widest text-white">Limite de Campos Próprios</span>
+                </div>
+                <p className="text-[11px] text-gray-500 mb-3">Quantos campos este dono pode criar sozinho. 0 = não pode criar.</p>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setEditLimit((v) => Math.max(0, v - 1))}
+                    className="w-10 h-10 tactical-panel-xs bg-brand-card border border-brand-border text-white hover:border-brand-primary flex items-center justify-center transition-colors"
+                  >
+                    <Minus size={16} />
+                  </button>
+                  <input
+                    type="number" min={0} value={editLimit}
+                    onChange={(e) => setEditLimit(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
+                    className="w-20 text-center bg-brand-card border border-brand-border tactical-panel-xs p-2.5 text-white text-lg font-black focus:border-brand-primary outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setEditLimit((v) => v + 1)}
+                    className="w-10 h-10 tactical-panel-xs bg-brand-card border border-brand-border text-white hover:border-brand-primary flex items-center justify-center transition-colors"
+                  >
+                    <Plus size={16} />
+                  </button>
+                  <span className="text-xs text-gray-500 font-bold uppercase tracking-widest">campo(s)</span>
+                </div>
+              </div>
+            )}
+
             <div className="grid grid-cols-2 gap-4 mt-8">
-              <button onClick={() => setEditingUser(null)} className="py-4 rounded-xl border border-brand-border text-gray-400 hover:text-white text-xs font-bold uppercase tracking-widest transition-colors">
+              <button onClick={() => setEditingUser(null)} className="py-4 tactical-panel-xs border border-brand-border text-gray-400 hover:text-white text-xs font-bold uppercase tracking-widest transition-colors">
                 Cancelar
               </button>
-              <button onClick={saveRoles} className="py-4 rounded-xl bg-brand-primary text-black hover:bg-brand-primary-light text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-colors">
+              <button onClick={saveRoles} className="py-4 tactical-panel-xs bg-brand-primary text-black hover:bg-brand-primary-light text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-colors">
                 <Check size={16}/> Salvar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {donationUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setDonationUser(null)} />
+          <div className="bg-brand-card w-full max-w-md tactical-panel border border-yellow-500/30 p-8 relative z-10">
+          <CornerBrackets corners={["tr", "bl"]} color="#eab308" size={16} />
+            <h3 className="text-2xl font-black text-white uppercase tracking-tight mb-2 flex items-center gap-2">
+              <Heart size={22} className="text-yellow-500" /> Registrar Doação
+            </h3>
+            <p className="text-gray-400 text-sm mb-6 font-bold">
+              Para: <span className="text-yellow-500">{donationUser.name}</span>
+            </p>
+
+            <div className="bg-brand-bg/50 border border-brand-border tactical-panel-xs p-4 mb-6 text-xs text-gray-400 leading-relaxed">
+              Use isto depois de conferir o PIX recebido manualmente. A cada <strong className="text-yellow-500">R$ {REAIS_PER_WEEK}</strong> o usuário ganha <strong className="text-yellow-500">1 semana</strong> de destaque de doador — o tempo soma em cima do prazo atual, se já for doador.
+            </div>
+
+            <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest pl-1">Valor doado (R$)</label>
+            <input
+              type="number" min={1} step="0.01" value={donationAmount}
+              onChange={(e) => setDonationAmount(e.target.value)}
+              className="w-full mt-2 bg-brand-bg border border-brand-border tactical-panel-xs p-3.5 text-white text-lg font-black focus:border-yellow-500 outline-none"
+            />
+            {Number(donationAmount) > 0 && (
+              <p className="text-[11px] text-gray-500 mt-2">
+                = {Math.floor(Number(donationAmount) / REAIS_PER_WEEK)} semana(s) de destaque.
+              </p>
+            )}
+
+            <div className="grid grid-cols-2 gap-4 mt-8">
+              <button onClick={() => setDonationUser(null)} className="py-4 tactical-panel-xs border border-brand-border text-gray-400 hover:text-white text-xs font-bold uppercase tracking-widest transition-colors">
+                Cancelar
+              </button>
+              <button
+                onClick={saveDonation}
+                disabled={savingDonation}
+                className="py-4 tactical-panel-xs bg-yellow-500 text-black hover:bg-yellow-400 text-xs font-black uppercase tracking-widest flex items-center justify-center gap-2 transition-colors disabled:opacity-50"
+              >
+                {savingDonation ? <Loader2 className="animate-spin" size={16} /> : <Check size={16} />} Confirmar
               </button>
             </div>
           </div>

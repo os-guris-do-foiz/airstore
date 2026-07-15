@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import { X, Send, AlertTriangle, Shield, Hammer, Clock } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { api } from "../../api/apiClient";
+import { reportsApi } from "../../api/reports";
+import CornerBrackets from "../CornerBrackets";
 
 interface ReportModalProps {
   isOpen: boolean;
@@ -54,15 +55,11 @@ const ReportModal: React.FC<ReportModalProps> = ({
     setError("");
 
     try {
-      await api.post("/reports", {
+      await reportsApi.create({
         target_id: targetId,
         type,
         reason,
         description,
-      }, {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem('fronteira_token')}`
-        }
       });
       setSuccess(true);
       setTimeout(() => {
@@ -94,8 +91,9 @@ const ReportModal: React.FC<ReportModalProps> = ({
         initial={{ opacity: 0, scale: 0.9, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.9, y: 20 }}
-        className="relative w-full max-w-lg bg-brand-card border border-brand-border rounded-3xl overflow-hidden shadow-2xl"
+        className="tactical-panel relative w-full max-w-lg bg-brand-card border border-brand-border overflow-hidden shadow-2xl"
       >
+        <CornerBrackets corners={["tr", "bl"]} size={16} inset={2} />
         <div className="p-6 border-b border-brand-border flex items-center justify-between bg-brand-bg/50">
           <div className="flex items-center gap-3">
             <div className={`p-2 rounded-lg ${isBug ? "bg-brand-primary/10" : "bg-red-500/10"}`}>
@@ -149,7 +147,7 @@ const ReportModal: React.FC<ReportModalProps> = ({
                       key={item.id}
                       type="button"
                       onClick={() => setReason(item.label)}
-                      className={`flex items-center gap-3 p-4 rounded-xl border transition-all text-left ${
+                      className={`tactical-panel-xs flex items-center gap-3 p-4 border transition-all text-left ${
                         reason === item.label
                           ? "bg-brand-primary/10 border-brand-primary text-brand-primary"
                           : "bg-brand-bg border-brand-border text-gray-400 hover:border-gray-600"
@@ -184,7 +182,7 @@ const ReportModal: React.FC<ReportModalProps> = ({
               <button
                 type="submit"
                 disabled={loading || !reason}
-                className={`w-full h-14 rounded-xl flex items-center justify-center gap-2 font-black uppercase tracking-widest text-sm transition-all shadow-xl shadow-brand-primary/5 ${
+                className={`tactical-panel-xs w-full h-14 flex items-center justify-center gap-2 font-black uppercase tracking-widest text-sm transition-all shadow-xl shadow-brand-primary/5 ${
                   loading || !reason
                     ? "bg-gray-800 text-gray-500 cursor-not-allowed"
                     : "bg-brand-primary text-black hover:scale-[1.02]"

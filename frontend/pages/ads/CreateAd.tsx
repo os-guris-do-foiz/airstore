@@ -2,6 +2,8 @@ import React, { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Camera, AlertCircle, Loader2, X } from "lucide-react";
 import { adsApi } from "../../api/ads";
+import { CATEGORY_OPTIONS, MODEL_OPTIONS, TYPE_OPTIONS } from "../../utils/adOptions";
+import { CONDITION_OPTIONS } from "../../utils/wear";
 
 const CreateAd: React.FC = () => {
   const navigate = useNavigate();
@@ -9,42 +11,88 @@ const CreateAd: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
-  
+
   const [formData, setFormData] = useState({
     title: "",
     description: "",
     price: "",
     whatsapp: "",
     location: "",
-    model: "M4",
-    type: "AEG",
+    model: MODEL_OPTIONS[0],
+    type: TYPE_OPTIONS[0],
     category: "Airsoft",
-    condition: "Novo",
+    condition: "",
     brand: "",
     fps: "",
     accepts_trade: false,
   });
 
+  const handleCategoryChange = (category: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      category,
+      model: category === "Airsoft" ? (prev.model || MODEL_OPTIONS[0]) : "",
+      type: category === "Airsoft" ? (prev.type || TYPE_OPTIONS[0]) : "",
+      fps: category === "Airsoft" ? prev.fps : "",
+      condition: category === "Serviços" ? "" : prev.condition,
+      brand: category === "Serviços" ? "" : prev.brand,
+    }));
+  };
+
+  const MAX_IMAGES = 10;
+  const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB, padrão aceitável para imagens de e-commerce
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      setImageFiles(Array.from(e.target.files));
+    if (!e.target.files) return;
+
+    const newFiles = Array.from(e.target.files);
+    e.target.value = "";
+
+    const oversized = newFiles.find((file) => file.size > MAX_IMAGE_SIZE_BYTES);
+    if (oversized) {
+      setError(`A imagem "${oversized.name}" excede o tamanho máximo de 5MB.`);
+      return;
     }
+
+    const combined = [...imageFiles, ...newFiles];
+    if (combined.length > MAX_IMAGES) {
+      setError(`Você pode enviar no máximo ${MAX_IMAGES} imagens por anúncio. Você já tem ${imageFiles.length} e tentou adicionar mais ${newFiles.length}.`);
+      return;
+    }
+
+    setError(null);
+    setImageFiles(combined);
+  };
+
+  const showError = (message: string) => {
+    setError(message);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setError(null);
 
     const currentUserStr = localStorage.getItem("fronteira_user");
     if (!currentUserStr) {
-      setError("Você precisa estar logado para anunciar.");
-      setLoading(false);
+      showError("Você precisa estar logado para anunciar.");
       return;
     }
 
+    if (formData.category !== "Serviços" && !formData.condition) {
+      showError("Selecione o estado de conservação do equipamento.");
+      return;
+    }
+
+    setLoading(true);
+
+    const normalized =
+      formData.category === "Serviços"
+        ? { ...formData, type: "Serviços", model: "N/A", brand: "N/A", fps: "N/A", condition: "N/A" }
+        : formData;
+
     const payload = new FormData();
-    Object.entries(formData).forEach(([key, value]) => {
+    Object.entries(normalized).forEach(([key, value]) => {
       payload.append(key, String(value));
     });
     imageFiles.forEach((file) => payload.append("images", file));
@@ -53,7 +101,7 @@ const CreateAd: React.FC = () => {
       const res = await adsApi.create(payload as any);
       navigate(`/ads/${res.id}`);
     } catch (err: any) {
-      setError(err.message || "Falha ao criar anúncio. Verifique os dados.");
+      showError(err.message || "Falha ao criar anúncio. Verifique os dados.");
     } finally {
       setLoading(false);
     }
@@ -71,7 +119,7 @@ const CreateAd: React.FC = () => {
       </div>
 
       {error && (
-        <div className="mb-6 p-4 bg-red-500/10 border border-red-500/50 rounded-xl text-red-500 text-xs font-bold uppercase tracking-widest text-center animate-pulse">
+        <div className="mb-6 p-4 bg-red-500/10 border border-red-500/50 tactical-panel-xs text-red-500 text-xs font-bold uppercase tracking-widest text-center animate-pulse">
           {error}
         </div>
       )}
@@ -80,9 +128,8 @@ const CreateAd: React.FC = () => {
         onSubmit={handleSubmit}
         className="grid grid-cols-1 lg:grid-cols-3 gap-8"
       >
-        {/* Coluna Esquerda: Informações Principais e Galeria */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="bg-brand-card p-6 md:p-8 rounded-3xl border border-gray-800 space-y-6 shadow-xl">
+          <div className="bg-brand-card p-6 md:p-8 tactical-panel border border-gray-800 space-y-6 shadow-xl">
             <div className="space-y-2">
               <label className="text-gray-400 text-xs font-bold uppercase tracking-widest">
                 Título do Anúncio
@@ -149,42 +196,52 @@ const CreateAd: React.FC = () => {
             </div>
           </div>
 
-          {/* Galeria de Fotos com Upload */}
-          <div className="bg-brand-card p-6 md:p-8 rounded-3xl border border-gray-800 space-y-6 shadow-xl">
-            <h3 className="text-white font-black uppercase tracking-tight text-xl">
-              Galeria de Fotos
-            </h3>
-            
-            <input 
-              type="file" 
-              ref={fileInputRef} 
-              className="hidden" 
-              multiple 
-              accept="image/*" 
-              onChange={handleFileChange} 
+          <div className="bg-brand-card p-6 md:p-8 tactical-panel border border-gray-800 space-y-6 shadow-xl">
+            <div className="flex items-center justify-between">
+              <h3 className="text-white font-black uppercase tracking-tight text-xl">
+                Galeria de Fotos
+              </h3>
+              <span
+                className={`text-xs font-bold uppercase tracking-widest ${
+                  imageFiles.length >= MAX_IMAGES ? "text-red-500" : "text-gray-500"
+                }`}
+              >
+                {imageFiles.length}/{MAX_IMAGES}
+              </span>
+            </div>
+
+            <input
+              type="file"
+              ref={fileInputRef}
+              className="hidden"
+              multiple
+              accept="image/*"
+              onChange={handleFileChange}
             />
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div 
-                onClick={() => fileInputRef.current?.click()}
-                className="aspect-square rounded-2xl border-2 border-dashed border-gray-700 flex flex-col items-center justify-center gap-2 text-gray-500 hover:text-brand-primary hover:border-brand-primary transition-all cursor-pointer bg-brand-bg/50"
-              >
-                <Camera size={32} />
-                <span className="text-[10px] font-bold uppercase text-center px-2">
-                  Adicionar Foto
-                </span>
-              </div>
-              
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-h-[420px] overflow-y-auto pr-1">
+              {imageFiles.length < MAX_IMAGES && (
+                <div
+                  onClick={() => fileInputRef.current?.click()}
+                  className="aspect-square tactical-panel-sm border-2 border-dashed border-gray-700 flex flex-col items-center justify-center gap-2 text-gray-500 hover:text-brand-primary hover:border-brand-primary transition-all cursor-pointer bg-brand-bg/50"
+                >
+                  <Camera size={32} />
+                  <span className="text-[10px] font-bold uppercase text-center px-2">
+                    Adicionar Foto
+                  </span>
+                </div>
+              )}
+
               {imageFiles.map((file, i) => (
                 <div key={i} className="relative aspect-square">
-                  <img 
-                    src={URL.createObjectURL(file)} 
-                    className="w-full h-full object-cover rounded-xl" 
+                  <img
+                    src={URL.createObjectURL(file)}
+                    className="w-full h-full object-cover tactical-panel-xs"
                     alt={`Preview ${i}`}
                   />
-                  <button 
-                    type="button" 
-                    onClick={() => setImageFiles(imageFiles.filter((_, idx) => idx !== i))} 
+                  <button
+                    type="button"
+                    onClick={() => { setError(null); setImageFiles(imageFiles.filter((_, idx) => idx !== i)); }}
                     className="absolute -top-2 -right-2 bg-red-500 hover:bg-red-600 transition-colors rounded-full p-1 text-white shadow-lg"
                   >
                     <X size={14} />
@@ -192,19 +249,18 @@ const CreateAd: React.FC = () => {
                 </div>
               ))}
             </div>
-            
+
             <div className="flex gap-2 text-gray-500">
               <AlertCircle size={16} className="shrink-0" />
               <p className="text-[10px] uppercase font-bold">
-                Dica: Fotos reais e bem iluminadas aumentam a chance de venda.
+                Máximo de {MAX_IMAGES} fotos, até 5MB cada. Fotos reais e bem iluminadas aumentam a chance de venda.
               </p>
             </div>
           </div>
         </div>
 
-        {/* Coluna Direita: Especificações e Botão */}
         <div className="space-y-6">
-          <div className="bg-brand-card p-6 md:p-8 rounded-3xl border border-gray-800 space-y-6 shadow-xl sticky top-24">
+          <div className="bg-brand-card p-6 md:p-8 tactical-panel border border-gray-800 space-y-6 shadow-xl sticky top-24">
             <h3 className="text-white font-black uppercase tracking-tight text-xl">
               Equipamento
             </h3>
@@ -217,36 +273,45 @@ const CreateAd: React.FC = () => {
                 <select
                   className="input-field w-full h-10 text-sm bg-brand-card"
                   value={formData.category}
-                  onChange={(e) =>
-                    setFormData({ ...formData, category: e.target.value })
-                  }
+                  onChange={(e) => handleCategoryChange(e.target.value)}
                 >
-                  <option value="Airsoft">Airsoft / Marcadores</option>
-                  <option value="Acessórios">Acessórios</option>
-                  <option value="Peças">Peças e Upgrades</option>
-                  <option value="Serviços">Serviços / Armeiro</option>
-                  <option value="Kits">Kits Completos</option>
+                  {CATEGORY_OPTIONS.map((c) => (
+                    <option key={c.value} value={c.value}>{c.label}</option>
+                  ))}
                 </select>
               </div>
 
               {formData.category !== "Serviços" && (
                 <div className="space-y-2">
                   <label className="text-gray-400 text-[10px] font-bold uppercase tracking-widest">
-                    Estado de Conservação
+                    Estado de Conservação <span className="text-red-500">*</span>
                   </label>
-                  <select
-                    className="input-field w-full h-10 text-sm bg-brand-card"
-                    value={formData.condition}
-                    onChange={(e) =>
-                      setFormData({ ...formData, condition: e.target.value })
-                    }
-                  >
-                    <option value="Fábrica Nova (FN)">Fábrica Nova (FN)</option>
-                    <option value="Pouco Usada (MW)">Pouco Usada (MW)</option>
-                    <option value="Testada em Campo (FT)">Testada em Campo (FT)</option>
-                    <option value="Bem Desgastada (WW)">Bem Desgastada (WW)</option>
-                    <option value="Veterana de Guerra (BS)">Veterana de Guerra (BS)</option>
-                  </select>
+                  <div className="grid grid-cols-1 gap-1.5">
+                    {CONDITION_OPTIONS.map((c) => {
+                      const selected = formData.condition === c.label;
+                      return (
+                        <button
+                          key={c.code}
+                          type="button"
+                          onClick={() => setFormData({ ...formData, condition: c.label })}
+                          className="tactical-panel-xs flex items-center gap-2 px-3 py-2 border text-left transition-all"
+                          style={
+                            selected
+                              ? { background: `${c.color}22`, borderColor: c.color, color: c.color }
+                              : { borderColor: "var(--color-brand-border)", color: "#9ca3af" }
+                          }
+                        >
+                          <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: c.color, boxShadow: selected ? `0 0 6px ${c.color}` : undefined }} />
+                          <span className="text-xs font-bold uppercase tracking-wide">{c.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {!formData.condition && (
+                    <p className="text-[10px] text-amber-500 font-bold uppercase tracking-widest">
+                      Obrigatório — define a cor de desgaste do anúncio.
+                    </p>
+                  )}
                 </div>
               )}
 
@@ -280,14 +345,9 @@ const CreateAd: React.FC = () => {
                         setFormData({ ...formData, model: e.target.value })
                       }
                     >
-                      <option>M4</option>
-                      <option>AK47</option>
-                      <option>Pistola</option>
-                      <option>Sniper</option>
-                      <option>Shotgun</option>
-                      <option>SMG</option>
-                      <option>LMG/Suporte</option>
-                      <option>Outros</option>
+                      {MODEL_OPTIONS.map((m) => (
+                        <option key={m}>{m}</option>
+                      ))}
                     </select>
                   </div>
 
@@ -302,11 +362,9 @@ const CreateAd: React.FC = () => {
                         setFormData({ ...formData, type: e.target.value })
                       }
                     >
-                      <option>AEG</option>
-                      <option>GBB (Gás)</option>
-                      <option>Spring (Mola)</option>
-                      <option>HPA</option>
-                      <option>CO2</option>
+                      {TYPE_OPTIONS.map((t) => (
+                        <option key={t}>{t}</option>
+                      ))}
                     </select>
                   </div>
                   
@@ -363,6 +421,9 @@ const CreateAd: React.FC = () => {
                   </select>
                 </div>
               )}
+              
+
+
             </div>
 
             <button

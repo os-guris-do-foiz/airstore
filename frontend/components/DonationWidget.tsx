@@ -16,7 +16,6 @@ const DonationWidget: React.FC = () => {
           className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-[60]"
         >
           <div className="relative group">
-            {/* Close button */}
             <button
               onClick={() => setIsVisible(false)}
               className="absolute -top-2 -right-2 w-5 h-5 sm:w-6 sm:h-6 bg-gray-800 text-gray-400 rounded-full flex items-center justify-center hover:text-white hover:bg-gray-700 transition-colors border border-white/5 opacity-100 sm:opacity-0 group-hover:opacity-100 z-20 shadow-lg"
@@ -28,7 +27,6 @@ const DonationWidget: React.FC = () => {
               to="/about"
               className="block bg-brand-card/90 backdrop-blur-xl border border-white/10 p-2.5 sm:p-4 rounded-2xl shadow-[0_10px_30px_rgba(0,0,0,0.5)] hover:border-brand-primary/50 transition-all group/card overflow-hidden"
             >
-              {/* Subtle glow effect */}
               <div className="absolute inset-0 bg-brand-primary/5 opacity-0 group-hover/card:opacity-100 transition-opacity" />
 
               <div className="flex items-center gap-3 sm:gap-4 relative z-10">
