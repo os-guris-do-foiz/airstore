@@ -1,9 +1,10 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn } from "typeorm";
-import { User } from "./user"; 
+import { Entity, PrimaryColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, BeforeInsert } from "typeorm";
+import { randomId } from "../utils/id";
+import { User } from "./user";
 
-@Entity('reports') 
+@Entity('reports')
 export class Report {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryColumn('varchar', { length: 15 })
   id: string;
 
 
@@ -11,7 +12,7 @@ export class Report {
   @JoinColumn({ name: 'reporter_id' })
   reporter: User;
 
-  @Column('uuid')
+  @Column('varchar')
   target_id: string;
 
   @Column({ type: 'varchar', length: 50 })
@@ -23,12 +24,17 @@ export class Report {
   @Column({ type: 'text', nullable: true })
   description: string;
 
+  @Column("text", { array: true, default: [] })
+  images: string[];
+
   @Column({ type: 'varchar', length: 50, default: 'PENDING' })
-  status: string; 
+  status: string;
 
   @CreateDateColumn()
   created_at: Date;
 
   @UpdateDateColumn()
   updated_at: Date;
+
+  @BeforeInsert() setId() { this.id = randomId(); }
 }

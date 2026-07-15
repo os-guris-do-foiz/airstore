@@ -1,7 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
-
-const JWT_SECRET = process.env.JWT_SECRET || 'fronteira-super-secret-key';
+import { AppDataSource } from '../db/index';
+import { User } from '../domains/user';
+import { JWT_SECRET } from '../config/env';
 
 export interface AuthRequest extends Request {
   user?: {
@@ -10,7 +11,13 @@ export interface AuthRequest extends Request {
   };
 }
 
-export const authenticate = (req: AuthRequest, res: Response, next: NextFunction) => {
+const isBanned = async (userId: string): Promise<boolean> => {
+  const userRepo = AppDataSource.getRepository(User);
+  const user = await userRepo.findOne({ where: { id: userId } });
+  return !user || user.status === 'BANNED';
+};
+
+export const authenticate = async (req: AuthRequest, res: Response, next: NextFunction) => {
   const authHeader = req.headers.authorization;
 
   if (!authHeader) {
@@ -19,13 +26,38 @@ export const authenticate = (req: AuthRequest, res: Response, next: NextFunction
 
   const [, token] = authHeader.split(' ');
 
+  let decoded: { id: string; roles: string[] };
   try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { id: string; roles: string[] };
-    req.user = decoded;
-    return next();
+    decoded = jwt.verify(token, JWT_SECRET) as { id: string; roles: string[] };
   } catch (err) {
     return res.status(401).json({ error: 'Token inválido ou expirado.' });
   }
+
+  try {
+    if (await isBanned(decoded.id)) {
+      return res.status(403).json({ error: 'Sua conta foi banida.' });
+    }
+  } catch (err) {
+    return res.status(500).json({ error: 'Falha ao validar autenticação.' });
+  }
+
+  req.user = decoded;
+  return next();
+};
+
+export const optionalAuthenticate = async (req: AuthRequest, _res: Response, next: NextFunction) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader) return next();
+
+  const [, token] = authHeader.split(' ');
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as { id: string; roles: string[] };
+    if (!(await isBanned(decoded.id))) {
+      req.user = decoded;
+    }
+  } catch {
+  }
+  return next();
 };
 
 export const authorize = (allowedRoles: string[]) => {

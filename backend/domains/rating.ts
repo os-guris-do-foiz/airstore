@@ -1,4 +1,5 @@
 import { Entity, PrimaryColumn, Column, CreateDateColumn, ManyToOne, JoinColumn, Unique, Check, BeforeInsert } from "typeorm";
+import { randomId } from "../utils/id";
 import { User } from "./user";
 
 @Entity('ratings')
@@ -19,5 +20,5 @@ export class Rating {
   
   @CreateDateColumn() created_at: Date;
 
-  @BeforeInsert() setId() { this.id = Math.random().toString(36).substring(2, 13); }
+  @BeforeInsert() setId() { this.id = randomId(); }
 }

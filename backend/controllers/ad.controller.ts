@@ -1,12 +1,24 @@
 import { Request, Response } from "express";
 import * as adService from "../services/adservice";
+import { processAndStoreImages } from "../services/imageService";
 
 export const getAll = async (req: Request, res: Response) => {
   try {
-    const ads = await adService.getAllAds(req.query);
+    const page = await adService.getAllAds(req.query);
+    res.json(page);
+  } catch (error: any) {
+    console.error(error);
+    res.status(500).json({ error: "Erro interno do servidor." });
+  }
+};
+
+export const getSpotlight = async (req: Request, res: Response) => {
+  try {
+    const ads = await adService.getSpotlightAds(Number(req.query.limit) || undefined);
     res.json(ads);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error(error);
+    res.status(500).json({ error: "Erro interno do servidor." });
   }
 };
 
@@ -16,7 +28,8 @@ export const getById = async (req: Request, res: Response) => {
     if (!ad) return res.status(404).json({ error: "Anúncio não encontrado" });
     res.json(ad);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error(error);
+    res.status(500).json({ error: "Erro interno do servidor." });
   }
 };
 
@@ -25,13 +38,11 @@ export const create = async (req: any, res: Response) => {
     const userId = req.user?.id;
     if (!userId) return res.status(401).json({ error: "Não autorizado" });
 
-    // O Multer vai ler o FormData e colocar os textos aqui:
     const adData = { ...req.body };
 
-    // O Multer vai salvar as fotos no PC e colocar as informações delas aqui:
+    delete adData.images;
     if (req.files && req.files.length > 0) {
-      // Criamos a URL exata para o frontend achar a imagem depois
-      adData.images = req.files.map((file: any) => `http://localhost:3000/uploads/${file.filename}`);
+      adData.images = await processAndStoreImages(req.files.map((file: any) => file.buffer));
     }
 
     const ad = await adService.createAd(userId, adData);
@@ -43,12 +54,22 @@ export const create = async (req: any, res: Response) => {
 
 export const update = async (req: any, res: Response) => {
   try {
-    const adData = { ...req.body };
-    
-    if (req.files && req.files.length > 0) {
-      adData.images = req.files.map((file: any) => `http://localhost:3000/uploads/${file.filename}`);
+    const existing = await adService.getAdById(req.params.id);
+    if (!existing) return res.status(404).json({ error: "Anúncio não encontrado" });
+
+    const isAdmin = req.user?.roles?.includes("ADMIN");
+    const isOwner = (existing as any).user_id === req.user?.id;
+    if (!isAdmin && !isOwner) {
+      return res.status(403).json({ error: "Você só pode editar os seus próprios anúncios." });
     }
-    
+
+    const adData = { ...req.body };
+
+    delete adData.images;
+    if (req.files && req.files.length > 0) {
+      adData.images = await processAndStoreImages(req.files.map((file: any) => file.buffer));
+    }
+
     const ad = await adService.updateAd(req.params.id, adData);
     res.json(ad);
   } catch (error: any) {
@@ -56,21 +77,31 @@ export const update = async (req: any, res: Response) => {
   }
 };
 
-export const deleteAd = async (req: any, res: Response) => {
+export const registerView = async (req: Request, res: Response) => {
   try {
-    const success = await adService.deleteAd(req.params.id);
-    if (!success) return res.status(404).json({ error: "Anúncio não encontrado" });
+    await adService.incrementAdViews(req.params.id);
     res.status(204).send();
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("Falha ao registrar view:", error);
+    res.status(204).send();
   }
 };
 
-export const markAsSold = async (req: any, res: Response) => {
+export const deleteAd = async (req: any, res: Response) => {
   try {
-    const ad = await adService.markAdAsSold(req.params.id);
-    res.json(ad);
+    const ad = await adService.getAdById(req.params.id);
+    if (!ad) return res.status(404).json({ error: "Anúncio não encontrado" });
+
+    const isAdmin = req.user?.roles?.includes("ADMIN");
+    const isOwner = (ad as any).user_id === req.user?.id;
+    if (!isAdmin && !isOwner) {
+      return res.status(403).json({ error: "Você só pode apagar os seus próprios anúncios." });
+    }
+
+    await adService.deleteAd(req.params.id);
+    res.status(204).send();
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error(error);
+    res.status(500).json({ error: "Erro interno do servidor." });
   }
 };

@@ -1,4 +1,5 @@
 import { Entity, PrimaryColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne, JoinColumn, BeforeInsert } from "typeorm";
+import { randomId } from "../utils/id";
 import { User } from "./user";
 
 @Entity('ads')
@@ -28,9 +29,11 @@ export class Ad {
   
   @Column('boolean', { default: false }) accepts_trade: boolean;
   @Column('boolean', { default: false }) is_sold: boolean;
-  
+
+  @Column('int', { default: 0 }) view_count: number;
+
   @CreateDateColumn() created_at: Date;
   @UpdateDateColumn() updated_at: Date;
 
-  @BeforeInsert() setId() { this.id = Math.random().toString(36).substring(2, 13); }
+  @BeforeInsert() setId() { this.id = randomId(); }
 }
